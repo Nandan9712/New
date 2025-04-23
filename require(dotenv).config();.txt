@@ -1,0 +1,492 @@
+require("dotenv").config();
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// ====== MongoDB Connection ======
+mongoose
+  .connect("mongodb://localhost:27017/minor_project", {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch((err) => console.log("❌ MongoDB Error:", err));
+
+
+// ====== SCHEMAS ======
+const VALID_ROLES = ["student", "teacher", "examiner"];
+
+const userSchema = new mongoose.Schema({
+  name: String,
+  surname: String,
+  email: String,
+  password: String,
+  role: {
+    type: String,
+    enum: VALID_ROLES,
+    required: true,
+  },
+});
+const User = mongoose.model("User", userSchema);
+
+const CourseSchema = new mongoose.Schema({
+  title: String,
+  description: String,
+  teacherId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+});
+const Course = mongoose.model("Course", CourseSchema);
+
+const ClassSessionSchema = new mongoose.Schema({
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+  dateTime: Date,
+});
+const ClassSession = mongoose.model("ClassSession", ClassSessionSchema);
+
+const StudentCourseSchema = new mongoose.Schema({
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+  videoWatched: { type: Boolean, default: false }, // ✅ New field
+});
+
+const StudentCourse = mongoose.model("StudentCourse", StudentCourseSchema);
+
+
+const examinerSlotSchema = new mongoose.Schema({
+  examinerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  examinerName: { type: String, required: true },
+  fromTime: { type: Date, required: true },  // Storing time as a Date object
+  toTime: { type: Date, required: true },    // Storing time as a Date object
+});
+
+const ExaminerSlot = mongoose.model("ExaminerSlot", examinerSlotSchema);
+
+
+const examBookingSchema = new mongoose.Schema({
+  studentId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  courseId: { type: mongoose.Schema.Types.ObjectId, ref: "Course" },
+  examinerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  examTime: { type: Date },
+  status: { type: String, default: "Booked" },
+});
+
+const ExamBooking = mongoose.model("ExamBooking", examBookingSchema);
+
+const registeredCourseSchema = new mongoose.Schema({
+  studentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
+  studentEmail: {
+    type: String,
+    required: true,
+  },
+  courseId: {
+    type: mongoose.Schema.Types.ObjectId,
+    required: true,
+  },
+  examBooked: {
+    type: Boolean,
+    default: false,
+  },
+  examDetails: {
+    examinerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
+    examinerName: String,
+    examTime: Date,
+  },
+});
+const RegisteredCourse = mongoose.model("RegisteredCourse", registeredCourseSchema);
+
+// ====== ROUTES ======
+
+// Register user
+app.post("/register", async (req, res) => {
+  try {
+    const { name, surname, email, password, role } = req.body;
+
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ message: "Invalid role selected!" });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser)
+      return res.status(400).json({ message: "User already exists!" });
+
+    const newUser = new User({ name, surname, email, password, role });
+    await newUser.save();
+    res.status(201).json({ message: "Registration Successful!" });
+  } catch (error) {
+    console.error("Registration error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Login
+app.post("/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    const user = await User.findOne({ email });
+
+    if (!user) return res.status(404).json({ message: "User not found!" });
+    if (user.password !== password)
+      return res.status(401).json({ message: "Invalid credentials!" });
+
+    const { name, role, _id } = user;
+
+    // ✅ Print user info here
+    console.log("Login successful!");
+    console.log("User ID:", _id);
+    console.log("Role:", role);
+    console.log("Email:", email);
+
+    res.status(200).json({
+      message: "Login successful!",
+      user: { name, email, role, _id },
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+
+// Teacher: Create Course
+app.post("/api/teacher/courses", async (req, res) => {
+  console.log("Received course data:", req.body);  // Log the incoming request body
+  
+  const { title, description, teacherId } = req.body;
+
+  // Ensure teacherId is present
+  if (!teacherId) {
+    return res.status(400).json({ message: "Teacher ID is missing" });
+  }
+
+  try {
+    const teacher = await User.findById(teacherId);
+    if (!teacher || teacher.role !== "teacher") {
+      return res.status(404).json({ message: "Teacher not found or unauthorized" });
+    }
+
+    const course = new Course({ title, description, teacherId: teacher._id });
+    await course.save();
+    res.json({ message: "Course created successfully!", course });
+  } catch (err) {
+    console.error("Error creating course:", err);
+    res.status(500).json({ message: "Error creating course" });
+  }
+});
+
+
+
+
+// Get courses by teacher ID
+app.get("/api/teacher/courses/:teacherId", async (req, res) => {
+  const { teacherId } = req.params;
+  try {
+    const courses = await Course.find({ teacherId });
+    res.json(courses);
+  } catch {
+    res.status(500).json({ message: "Error fetching courses" });
+  }
+});
+
+app.get("/api/teacher/courses/by-email/:email", async (req, res) => {
+  try {
+    const teacher = await User.findOne({ email: req.params.email, role: "teacher" });
+    if (!teacher) return res.status(404).json({ message: "Teacher not found" });
+
+    const courses = await Course.find({ teacherId: teacher._id });
+    res.json(courses);
+  } catch (err) {
+    console.error("Error fetching courses by teacher email:", err);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// Student: Get registered course IDs by email
+app.get("/api/student/registered-courses/by-email/:email", async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.params.email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const registrations = await StudentCourse.find({ studentId: user._id }).populate("courseId");
+    const courseIds = registrations.map((reg) => reg.courseId._id);
+
+    res.json({ courseIds });
+  } catch (error) {
+    console.error("Error fetching registered courses by email:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+});
+
+// Teacher: Schedule class session
+app.post("/api/teacher/schedule", async (req, res) => {
+  const { courseId, dateTime } = req.body;
+  try {
+    const session = new ClassSession({ courseId, dateTime });
+    await session.save();
+    res.json({ message: "Class scheduled!" });
+  } catch {
+    res.status(500).json({ message: "Error scheduling class" });
+  }
+});
+
+// Student: View all courses with sessions
+app.get("/api/courses/with-sessions", async (req, res) => {
+  try {
+    const courses = await Course.find().populate("teacherId", "name").lean();
+    const sessions = await ClassSession.find();
+
+    const sessionMap = {};
+    sessions.forEach((session) => {
+      const id = session.courseId.toString();
+      if (!sessionMap[id]) sessionMap[id] = [];
+      sessionMap[id].push(session);
+    });
+
+    const combined = courses.map((course) => ({
+      ...course,
+      sessions: sessionMap[course._id.toString()] || [],
+    }));
+
+    res.json(combined);
+  } catch (err) {
+    res.status(500).json({ message: "Error loading course data" });
+  }
+});
+
+// Student: Register for a course
+app.post("/register-course", async (req, res) => {
+  try {
+    const { courseId, studentId, studentEmail } = req.body;
+
+    // Check if already registered
+    const existing = await StudentCourse.findOne({ courseId, studentId });
+    if (existing) {
+      return res.status(400).json({ message: "Already registered for this course" });
+    }
+
+    // Register new course
+    const registration = new StudentCourse({
+      courseId: new mongoose.Types.ObjectId(courseId),
+      studentId: new mongoose.Types.ObjectId(studentId),
+      studentEmail,
+    });
+
+    await registration.save();
+
+    console.log("✅ Course registered:");
+    console.log("Student ID:", studentId);
+
+    console.log("Course ID:", courseId);
+
+    res.status(201).json({ message: "Registered successfully", registration });
+  } catch (error) {
+    console.error("Course registration error:", error);
+    res.status(500).json({ message: "Error registering course" });
+  }
+});
+
+
+
+// Student: View registered courses with session info
+app.get("/api/student/registered-courses/:studentId", async (req, res) => {
+  const { studentId } = req.params;
+  try {
+    const regs = await StudentCourse.find({ studentId }).populate({
+      path: "courseId",
+      populate: { path: "teacherId", select: "name" },
+    });
+
+    const courseIds = regs.map((r) => r.courseId._id);
+    const sessions = await ClassSession.find({ courseId: { $in: courseIds } });
+
+    const courseSessions = {};
+    sessions.forEach((s) => {
+      const cid = s.courseId.toString();
+      if (!courseSessions[cid]) courseSessions[cid] = [];
+      courseSessions[cid].push({
+        dateTime: s.dateTime,
+        daysRemaining: Math.ceil((new Date(s.dateTime) - new Date()) / (1000 * 60 * 60 * 24)),
+      });
+    });
+
+    const output = regs.map((r) => ({
+      _id: r.courseId._id,
+      title: r.courseId.title,
+      description: r.courseId.description,
+      teacherName: r.courseId.teacherId.name,
+      sessions: courseSessions[r.courseId._id.toString()] || [],
+      videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ" // Sample
+    }));
+
+    res.json(output);
+  } catch (err) {
+    res.status(500).json({ message: "Error fetching registered courses" });
+  }
+});
+
+// Student: Get registered course IDs (raw)
+app.get("/api/student/registered-courses", async (req, res) => {
+  const email = req.query.email;
+
+  try {
+    const student = await User.findOne({ email, role: "student" });
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const registeredCourses = await StudentCourse.find({ studentId: student._id });
+    res.json(registeredCourses);
+  } catch (err) {
+    console.error("Error fetching student registered courses:", err);
+    res.status(500).json({ error: "Failed to fetch registered courses" });
+  }
+});
+
+// Save availability
+// ExaminerSlot model assumed: examinerId, examinerName, fromTime, toTime
+app.post("/api/examiner/slots", async (req, res) => {
+  const { examinerId, examinerName, fromTime, toTime } = req.body;
+
+  try {
+    // Convert fromTime and toTime to Date objects
+    const fromDate = new Date(fromTime);
+    const toDate = new Date(toTime);
+
+    const existingSlot = await ExaminerSlot.findOne({ examinerId });
+
+    if (existingSlot) {
+      // Update existing slot instead of creating a new one
+      existingSlot.fromTime = fromDate;
+      existingSlot.toTime = toDate;
+      await existingSlot.save();
+
+      return res.json({ message: "Slot updated successfully." });
+    } else {
+      // Create new slot
+      const newSlot = new ExaminerSlot({
+        examinerId,
+        examinerName,
+        fromTime: fromDate,
+        toTime: toDate,
+      });
+
+      await newSlot.save();
+      res.json({ message: "Slot added successfully." });
+    }
+  } catch (error) {
+    console.error("Error handling slot:", error);
+    res.status(500).json({ message: "Server error while saving slot." });
+  }
+});
+
+
+app.post("/book-exam", async (req, res) => {
+  const { studentId, courseId, preferredTime } = req.body;
+
+  // Validate that all required information is present
+  if (!studentId || !courseId || !preferredTime) {
+    return res.status(400).json({ message: "Missing required information" });
+  }
+
+  try {
+    // Convert the preferred time to a Date object and validate it
+    const preferredDate = new Date(preferredTime);
+    if (isNaN(preferredDate.getTime())) {
+      return res.status(400).json({ message: "Invalid date format for preferredTime" });
+    }
+
+    console.log(`Preferred Date: ${preferredDate}`);
+
+    // Check if the student is registered for the course
+    const registered = await StudentCourse.findOne({ studentId, courseId });
+    if (!registered) {
+      return res.status(404).json({ message: "Student not registered for course" });
+    }
+
+    // Fetch available examiner slots for comparison
+    const examinerSlots = await ExaminerSlot.find({
+      fromTime: { $lte: preferredDate },
+      toTime: { $gte: preferredDate }
+    });
+
+    console.log("Available Examiner Slots:", examinerSlots); // Log all available slots for debugging
+
+    if (examinerSlots.length === 0) {
+      return res.status(404).json({ message: "No available examiner slot at the preferred time" });
+    }
+
+    // Get a random available examiner slot
+    const examinerSlot = examinerSlots[Math.floor(Math.random() * examinerSlots.length)];
+
+    // Create a new exam booking record with the selected examiner
+    const newExamBooking = new ExamBooking({
+      studentId: studentId,          // The student's ObjectId
+      courseId: courseId,            // The course's ObjectId
+      examinerId: examinerSlot.examinerId, // The examiner's ObjectId
+      examTime: preferredDate,       // The date and time of the exam
+    });
+
+    await newExamBooking.save(); // Save the new exam booking
+
+    // Optionally update the student's registered course record with exam details
+    await RegisteredCourse.findOneAndUpdate(
+      { studentId, courseId },
+      {
+        examBooked: true,
+        examDetails: {
+          examinerId: examinerSlot.examinerId,
+          examTime: preferredDate,
+        },
+      },
+      { upsert: true }
+    );
+
+    // Fetch examiner details (e.g., name) to send back in the response
+    const examiner = await User.findById(examinerSlot.examinerId);
+
+    res.status(200).json({
+      message: "Exam booked successfully",
+      examinerName: examiner ? examiner.name : "Unknown",
+      examTime: preferredDate,
+    });
+  } catch (error) {
+    console.error("Error during exam booking:", error);
+    res.status(500).json({ message: "Error booking exam" });
+  }
+});
+
+
+
+app.post("/mark-video-watched", async (req, res) => {
+  const { studentId, courseId } = req.body;
+
+  try {
+    const updated = await StudentCourse.findOneAndUpdate(
+      { studentId, courseId },
+      { $set: { videoWatched: true } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ message: "Registered course not found." });
+    }
+
+    res.status(200).json({ message: "Video marked as watched." });
+  } catch (err) {
+    console.error("Error in /mark-video-watched:", err);
+    res.status(500).json({ message: "Internal server error." });
+  }
+});
+
+
+// ====== Start Server ======
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

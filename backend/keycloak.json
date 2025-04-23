@@ -1,0 +1,12 @@
+{
+  "realm": "drone-app",
+  "auth-server-url": "http://localhost:8080/auth/",
+  "ssl-required": "external",
+  "resource": "frontend-client",
+  
+  "confidential-port": 0,
+  "redirect-uri": "http://localhost:5173/*",
+  "web-origins": [
+    "http://localhost:5173"
+  ]
+}
