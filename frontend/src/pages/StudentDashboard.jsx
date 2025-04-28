@@ -1,210 +1,546 @@
-import React, { useEffect, useState } from "react";
-import "../styles/dashboard.css";
-import "@fortawesome/fontawesome-free/css/all.min.css";
-import keycloak from "../keycloak"; // Make sure this is correctly set up
+import React, { useEffect, useState } from 'react';
+import keycloak from '../keycloak';
+import '../styles/StudentDashboard.css';
+import { 
+  FiHome, 
+  FiCalendar, 
+  FiBook, 
+  FiSettings, 
+  FiLogOut,
+  FiUser,
+  FiClock,
+  FiMapPin,
+  FiSearch,
+  FiUsers,
+  FiVideo
+} from 'react-icons/fi';
 
-const StudentDashboard = () => {
-  const [studentName, setStudentName] = useState("");
-  const [studentRole, setStudentRole] = useState("Student");
-  const [registeredCourses, setRegisteredCourses] = useState([]);
-  const [availableCourses, setAvailableCourses] = useState([]);
-  const [classSessions, setClassSessions] = useState([]);
+export default function StudentDashboard() {
+  const [allSessions, setAllSessions] = useState([]);
+  const [mySessions, setMySessions] = useState([]);
+  const [exams, setExams] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Fetch student info, registered courses, and available courses after keycloak authentication
+  // Fetch data functions
   useEffect(() => {
-    if (keycloak.authenticated) {
-      const name = keycloak.tokenParsed.name || "Student";
-      const email = keycloak.tokenParsed?.email;
-      if (!email) {
-        console.error("Email not found in Keycloak token");
-        return;
+    const load = async () => {
+      try {
+        if (!keycloak.authenticated) {
+          await keycloak.init({ onLoad: 'login-required' });
+        }
+        await keycloak.updateToken(5);
+
+        const [resAll, resMine, resExams] = await Promise.all([
+          fetch('http://localhost:5000/api/student/sessions', {
+            headers: { Authorization: `Bearer ${keycloak.token}` }
+          }),
+          fetch('http://localhost:5000/api/student/sessions/mine', {
+            headers: { Authorization: `Bearer ${keycloak.token}` }
+          }),
+          fetch('http://localhost:5000/api/student/exams/mine', {
+            headers: { Authorization: `Bearer ${keycloak.token}` }
+          })
+        ]);
+
+        setAllSessions(await resAll.json());
+        setMySessions(await resMine.json());
+        const examsData = await resExams.json();
+        setExams(Array.isArray(examsData) ? examsData : []);
+        
+      } catch (error) {
+        console.error('Error loading data:', error);
+      } finally {
+        setIsLoading(false);
       }
-
-      const role = keycloak.tokenParsed.realm_access?.roles[0] || "student";
-
-      setStudentName(name);
-      setStudentRole(role.charAt(0).toUpperCase() + role.slice(1));
-      fetchClassSessions(); // fetch all, not email specific
-    }
+    };
+    load();
   }, []);
 
-  const fetchClassSessions = async () => {
+  const enroll = async (id) => {
     try {
-      console.log("📡 Fetching class sessions from backend...");
-      const res = await fetch(`http://localhost:5000/student/class-sessions`);
-      const data = await res.json();
-
-      console.log("Class sessions fetched from backend:", data);  // ✅ Debug log
-
-      setClassSessions(data);
-
-      const uniqueCoursesMap = {};
-      data.forEach((session) => {
-        if (!uniqueCoursesMap[session.courseTitle]) {
-          uniqueCoursesMap[session.courseTitle] = {
-            title: session.courseTitle,
-            description: "Session available", // You can enhance this if needed
-          };
-        }
+      await keycloak.updateToken(5);
+      const res = await fetch(`http://localhost:5000/api/student/sessions/${id}/enroll`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${keycloak.token}` }
       });
-
-      const courses = Object.values(uniqueCoursesMap);
-      setAvailableCourses(courses);
-
-    } catch (error) {
-      console.error("Failed to fetch class sessions", error);
-    }
-  };
-
-  const handleRegisterCourse = async (courseTitle) => {
-    console.log("🔥 Register button clicked for:", courseTitle);
-
-    const email = keycloak.tokenParsed?.email;
-    if (!email) {
-      console.error("❌ Email not found in Keycloak token");
-      alert("No email found");
-      return;
-    }
-
-    const matchingSession = classSessions.find(
-      (session) => session.courseTitle === courseTitle
-    );
-
-    if (!matchingSession) {
-      alert("No matching session found for this course.");
-      return;
-    }
-
-    console.log("📦 Registering with data:", {
-      userEmail: email,
-      courseTitle,
-      teacherEmail: matchingSession.teacherEmail,
       
-    });
-
-    try {
-      const res = await fetch("http://localhost:5000/student/register-course", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userEmail: email,
-          courseTitle,
-          teacherEmail: matchingSession.teacherEmail,
-          
-        }),
-      });
-
-      const data = await res.json();
-      console.log("API Response:", data);
-
       if (res.ok) {
-        alert("✅ Registered successfully");
+        const updated = await fetch('http://localhost:5000/api/student/sessions/mine', {
+          headers: { Authorization: `Bearer ${keycloak.token}` }
+        });
+        setMySessions(await updated.json());
       } else {
-        alert(data.message || "❌ Failed to register");
+        const errorText = await res.text();
+        alert(errorText);
       }
     } catch (error) {
-      console.error("❗ Error registering for course:", error);
-      alert("An error occurred. Check console.");
+      console.error('Enrollment error:', error);
+      alert('Failed to enroll. Please try again.');
     }
   };
 
-  // Handle logout
   const handleLogout = () => {
     keycloak.logout({ redirectUri: window.location.origin });
   };
 
-  return (
-    <>
-      {/* Header */}
-      <header className="header">
-        <section className="flex">
-          <a href="/student" className="logo">DRONE</a>
-          <form className="search-form">
-            <input type="text" name="search_box" required placeholder="Search..." maxLength="100" />
-            <button type="submit" className="fas fa-search"></button>
-          </form>
-          <div className="icons">
-            <div id="menu-btn" className="fas fa-bars"></div>
-            <div id="search-btn" className="fas fa-search"></div>
-            <div id="user-btn" className="fas fa-user"></div>
-            <div id="toggle-btn" className="fas fa-sun"></div>
-          </div>
-          <div className="profile">
-            <img src="/images/pic-1.jpg" className="image" alt="profile" />
-            <h3 className="name">{studentName}</h3>
-            <p className="role">{studentRole}</p>
-            <a href="/profile" className="btn">View Profile</a>
-            <div className="flex-btn">
-              <button onClick={handleLogout} className="option-btn">Logout</button>
-            </div>
-          </div>
-        </section>
-      </header>
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen);
+  };
 
-      {/* Sidebar */}
-      <div className="side-bar">
-        <div id="close-btn"><i className="fas fa-times"></i></div>
-        <div className="profile">
-          <img src="/images/pic-1.jpg" className="image" alt="profile" />
-          <h3 className="name">{studentName}</h3>
-          <p className="role">{studentRole}</p>
-          <a href="/profile" className="btn">View Profile</a>
-        </div>
-        <nav className="navbar">
-          <a href="/student"><i className="fas fa-home"></i><span>Home</span></a>
-          <a href="/student/courses"><i className="fas fa-book"></i><span>My Courses</span></a>
-          <a href="#available-courses"><i className="fas fa-calendar-alt"></i><span>Available Courses</span></a>
-        </nav>
-        <div className="sidebar-logout">
-          <button onClick={handleLogout} className="btn logout-sidebar-btn">
-            <i className="fas fa-sign-out-alt"></i> Logout
-          </button>
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-4 text-lg font-medium text-gray-700">Loading your dashboard...</p>
         </div>
       </div>
+    );
+  }
 
-      {/* Dashboard Content */}
-      <section className="home-grid">
-        <h1 className="heading">Student Quick Actions</h1>
-        <div className="box-container">
-          <div className="box">
-            <h3 className="title">Manage</h3>
-            <div className="flex">
-              <a href="/student/my-courses"><i className="fas fa-book"></i><span>My Courses</span></a>
-              <a href="/student/completed-courses"><i className="fas fa-check-circle"></i><span>Completed Courses</span></a>
-              <a href="/student/certificates"><i className="fas fa-certificate"></i><span>Certificates</span></a>
+  // Filtering logic based on the search term
+  const filteredMySessions = mySessions.filter(s =>
+    s.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredAllSessions = allSessions.filter(s =>
+    s.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.createdBy.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredExams = exams.filter(ex =>
+    ex.sessionId?.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="dashboard-container">
+      {/* Sidebar Toggle */}
+      <button 
+        className="sidebar-toggle" 
+        onClick={toggleSidebar}
+        aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+      >
+        {sidebarOpen ? '✕' : '☰'}
+      </button>
+
+      {/* Sidebar */}
+      <div className={`sidebar ${sidebarOpen ? '' : 'closed'}`}>
+        <div className="profile-section">
+          <img 
+            src="https://randomuser.me/api/portraits/lego/1.jpg" 
+            alt="Profile" 
+            className="profile-pic"
+          />
+          <h3 className="profile-name">
+            {keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username || 'User'}
+          </h3>
+          <p className="profile-email">{keycloak.tokenParsed?.email || 'No email available'}</p>
+        </div>
+
+        <nav className="nav-menu">
+          <button 
+            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <FiHome className="nav-icon" />
+            <span className="nav-text">Dashboard</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'sessions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sessions')}
+          >
+            <FiCalendar className="nav-icon" />
+            <span className="nav-text">Sessions</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'exams' ? 'active' : ''}`}
+            onClick={() => setActiveTab('exams')}
+          >
+            <FiBook className="nav-icon" />
+            <span className="nav-text">Exams</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'profile' ? 'active' : ''}`}
+            onClick={() => setActiveTab('profile')}
+          >
+            <FiUser className="nav-icon" />
+            <span className="nav-text">Profile</span>
+          </button>
+        </nav>
+
+        <button className="logout-btn" onClick={handleLogout}>
+          <FiLogOut className="nav-icon" />
+          <span className="nav-text">Logout</span>
+        </button>
+      </div>
+
+      {/* Main Content */}
+      <div className={`main-content ${!sidebarOpen ? 'expanded' : ''}`}>
+        <header className="header">
+          <h1 className="page-title">
+            {activeTab === 'dashboard' && 'Dashboard'}
+            {activeTab === 'sessions' && 'Training Sessions'}
+            {activeTab === 'exams' && 'Upcoming Exams'}
+            {activeTab === 'profile' && 'My Profile'}
+          </h1>
+
+          {/* Search Bar */}
+          <div className="search-container">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search sessions and exams..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            <FiSearch className="search-icon" />
+          </div>
+        </header>
+
+        {/* Dashboard Content */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6">
+            <div className="card">
+              <h2 className="card-title">Your Upcoming Sessions</h2>
+              {filteredMySessions.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FiCalendar className="mx-auto text-3xl mb-3" />
+                  <p>No upcoming sessions</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredMySessions.slice(0, 3).map(session => (
+                    <div key={session._id} className="flex items-start p-4 border rounded-lg hover:bg-gray-50">
+                      <div className="bg-blue-100 p-3 rounded-full mr-4">
+                        <FiCalendar className="text-blue-600 text-xl" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-800">{session.title || "Untitled Session"}</h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                          {session.classDates?.[0]?.date 
+                            ? new Date(session.classDates[0].date).toLocaleDateString('en-US', { 
+                                weekday: 'short', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              }) 
+                            : "Date not set"} at {session.classDates?.[0]?.time || "Time not set"}
+                        </p>
+                        {session.isLive && (
+                          <span className="inline-block mt-2 bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full">
+                            Live Session
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="card">
+              <h2 className="card-title">Upcoming Exams</h2>
+              {filteredExams.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <FiBook className="mx-auto text-3xl mb-3" />
+                  <p>No upcoming exams</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredExams.slice(0, 3).map(exam => (
+                    <div key={exam._id} className="flex items-start p-4 border rounded-lg hover:bg-gray-50">
+                      <div className="bg-purple-100 p-3 rounded-full mr-4">
+                        <FiBook className="text-purple-600 text-xl" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-medium text-gray-800">{exam.sessionId?.title || "Untitled Exam"}</h3>
+                        <div className="flex items-center text-sm text-gray-600 mt-1">
+                          <FiClock className="mr-2" />
+                          <span>
+                            {exam.date 
+                              ? new Date(exam.date).toLocaleDateString('en-US', { 
+                                  weekday: 'short', 
+                                  month: 'short', 
+                                  day: 'numeric' 
+                                }) 
+                              : "Date not set"} at {exam.time || "Time not set"}
+                          </span>
+                        </div>
+                        <div className="flex items-center text-sm text-gray-600 mt-1">
+                          <FiMapPin className="mr-2" />
+                          <span>{exam.isOnline ? 'Online Exam' : exam.location || "Location not specified"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Available Courses */}
-        <div id="available-courses">
-          <h2 className="heading">Available Courses</h2>
-          <div className="box-container">
-            {availableCourses.length === 0 ? (
-              <p>No available courses to register for.</p>
+        {/* Sessions Content */}
+        {activeTab === 'sessions' && (
+          <div className="card">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="card-title">Available Training Sessions</h2>
+              <span className="text-sm text-gray-500">
+                Showing {filteredAllSessions.length} session{filteredAllSessions.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+
+            {filteredAllSessions.length === 0 ? (
+              <div className="text-center py-8">
+                <FiCalendar className="mx-auto text-4xl text-gray-300 mb-3" />
+                <p className="text-gray-500">No sessions available matching your search</p>
+              </div>
             ) : (
-              availableCourses.map((course) => (
-                <div key={course.title} className="box">
-                  <h3>{course.title}</h3>
-                  <p>{course.description}</p>
-                  <button
-                    onClick={() => {
-                      console.log("🟢 Register clicked for", course.title);
-                      alert("Clicked " + course.title);
-                      handleRegisterCourse(course.title);
-                    }}
-                    className="btn"
-                  >
-                    Register
-                  </button>
-                </div>
-              ))
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredAllSessions.map(session => {
+                  const teacherEmail = session.createdBy || "teacher@example.com";
+                  const teacherName = teacherEmail.split('@')[0].replace('.', ' ');
+                  const isEnrolled = mySessions.some(ms => ms._id === session._id);
+                  const enrollmentCount = session.enrolledStudents?.length || 0;
+                  
+                  return (
+                    <div key={session._id} className="border rounded-lg p-5 hover:shadow-lg transition-all duration-200 bg-white">
+                      {/* Session Header */}
+                      <div className="flex justify-between items-start mb-3">
+                        <h3 className="font-bold text-lg text-gray-800 capitalize">
+                          {session.title.toLowerCase() || "new session"}
+                        </h3>
+                        <div className="flex space-x-2">
+                          {session.isLive && (
+                            <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full flex items-center">
+                              <span className="w-2 h-2 bg-red-500 rounded-full mr-1 animate-pulse"></span>
+                              Live
+                            </span>
+                          )}
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            isEnrolled ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
+                          }`}>
+                            {isEnrolled ? 'Enrolled' : 'Open'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Session Body */}
+                      <div className="mb-4">
+                        <p className="text-gray-600 mb-4 line-clamp-2">
+                          {session.description || "No description available for this session."}
+                        </p>
+
+                        <div className="space-y-2 text-sm">
+                          <div className="flex items-center text-gray-700">
+                            <FiUser className="mr-2 text-gray-500" />
+                            <span>Teacher: <span className="font-medium capitalize">{teacherName}</span></span>
+                          </div>
+                          
+                          {session.classDates?.length > 0 && (
+                            <div className="flex items-center text-gray-700">
+                              <FiCalendar className="mr-2 text-gray-500" />
+                              <span>
+                                {new Date(session.classDates[0].date).toLocaleDateString('en-US', {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                                {session.classDates.length > 1 && (
+                                  <span className="text-gray-500 ml-1">
+                                    (+{session.classDates.length - 1} more)
+                                  </span>
+                                )}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="flex items-center text-gray-700">
+                            <FiUsers className="mr-2 text-gray-500" />
+                            <span>{enrollmentCount} student{enrollmentCount !== 1 ? 's' : ''} enrolled</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Session Footer */}
+                      <div className="flex justify-between items-center pt-3 border-t">
+                        <span className="text-xs text-gray-500">
+                          Created: {new Date(session.createdAt).toLocaleDateString()}
+                        </span>
+                        
+                        {isEnrolled ? (
+                          <div className="flex items-center space-x-2">
+                            {session.zoomLink && (
+                              <a href={session.zoomLink} target="_blank" rel="noopener noreferrer" 
+                                className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1 rounded-full flex items-center">
+                                <FiVideo className="mr-1" /> Join
+                              </a>
+                            )}
+                            <span className="text-xs bg-green-50 text-green-600 px-2 py-1 rounded-full">
+                              ✓ Enrolled
+                            </span>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => enroll(session._id)}
+                            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                          >
+                            Enroll Now
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
-        </div>
-      </section>
-    </>
-  );
-};
+        )}
 
-export default StudentDashboard;
+        {/* Exams Content */}
+        {activeTab === 'exams' && (
+          <div className="card">
+            <h2 className="card-title">Your Upcoming Exams</h2>
+            {filteredExams.length === 0 ? (
+              <div className="text-center py-8">
+                <FiBook className="mx-auto text-4xl text-gray-300 mb-3" />
+                <p className="text-gray-500">No exams scheduled</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredExams.map(exam => (
+                  <div key={exam._id} className="border rounded-lg p-5 hover:shadow-md transition-shadow">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-800">
+                          {exam.sessionId?.title || "Untitled Exam"}
+                        </h3>
+                        <div className="flex items-center text-sm text-gray-600 mt-1">
+                          <FiClock className="mr-2" />
+                          <span>
+                            {exam.date 
+                              ? new Date(exam.date).toLocaleDateString('en-US', { 
+                                  weekday: 'short', 
+                                  month: 'short', 
+                                  day: 'numeric' 
+                                }) 
+                              : "Date not set"} at {exam.time || "Time not set"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="bg-purple-100 p-2 rounded-full">
+                        <FiBook className="text-purple-600 text-xl" />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 space-y-2 text-sm">
+                      <div className="flex items-center text-gray-700">
+                        <FiMapPin className="mr-2" />
+                        <span>{exam.isOnline ? 'Online Exam' : exam.location || "Location not specified"}</span>
+                      </div>
+                      
+                      <div className="flex items-center text-gray-700">
+                        <FiUser className="mr-2" />
+                        <span>Proctor: {exam.proctor || "Not assigned"}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="mt-4 pt-3 border-t flex justify-between items-center">
+                      <span className="text-xs text-gray-500">
+                        Duration: {exam.duration || "Not specified"}
+                      </span>
+                      <button className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-full">
+                        View Details
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Profile Content */}
+        {activeTab === 'profile' && (
+          <div className="card">
+            <h2 className="card-title">Your Profile</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="border-b pb-4">
+                  <h3 className="font-medium text-gray-700 mb-3">Personal Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-gray-500">Full Name</p>
+                      <p className="font-medium">{keycloak.tokenParsed?.name || 'Not available'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Email</p>
+                      <p className="font-medium">{keycloak.tokenParsed?.email || 'Not available'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Username</p>
+                      <p className="font-medium">{keycloak.tokenParsed?.preferred_username || 'Not available'}</p>
+                    </div>
+                  </div>
+                </div>
+                
+                <div>
+                  <h3 className="font-medium text-gray-700 mb-3">Account Details</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-gray-500">Account Created</p>
+                      <p className="font-medium">
+                        {keycloak.tokenParsed?.createdTimestamp 
+                          ? new Date(keycloak.tokenParsed.createdTimestamp * 1000).toLocaleDateString() 
+                          : 'Not available'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500">Last Login</p>
+                      <p className="font-medium">
+                        {keycloak.tokenParsed?.auth_time 
+                          ? new Date(keycloak.tokenParsed.auth_time * 1000).toLocaleString() 
+                          : 'Not available'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h3 className="font-medium text-gray-700 mb-3">Your Statistics</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-blue-600">Enrolled Sessions</p>
+                    <p className="text-2xl font-bold text-blue-800">{mySessions.length}</p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-purple-600">Upcoming Exams</p>
+                    <p className="text-2xl font-bold text-purple-800">{exams.length}</p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-green-600">Completed</p>
+                    <p className="text-2xl font-bold text-green-800">0</p>
+                  </div>
+                  <div className="bg-yellow-50 p-4 rounded-lg">
+                    <p className="text-sm text-yellow-600">Attendance Rate</p>
+                    <p className="text-2xl font-bold text-yellow-800">0%</p>
+                  </div>
+                </div>
+                
+                <div className="mt-6">
+                  <button className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-2 rounded-lg">
+                    Edit Profile
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

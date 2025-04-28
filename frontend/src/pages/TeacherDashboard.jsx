@@ -1,166 +1,286 @@
-import React, { useEffect, useState } from "react";
-import "../styles/dashboard.css";
-import "@fortawesome/fontawesome-free/css/all.min.css";
-import keycloak from "../keycloak"; // Import Keycloak config
+import React, { useEffect, useState, useCallback } from 'react';
+import keycloak from '../keycloak';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
+import '../styles/TeacherDashboard.css';
 
 const TeacherDashboard = () => {
-  const [teacherName, setTeacherName] = useState("");
-  const [teacherRole, setTeacherRole] = useState("Teacher");
-  const [courseTitle, setCourseTitle] = useState("");
-  const [dateTime, setDateTime] = useState("");
-  const [scheduledSessions, setScheduledSessions] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [newSession, setNewSession] = useState({
+    title: '',
+    description: '',
+    zoomLink: '',
+    classDates: [],
+    isLive: false,
+  });
+  const [loading, setLoading] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTime, setSelectedTime] = useState('');
+  const [activeTab, setActiveTab] = useState('create');
 
-  useEffect(() => {
-    const user = JSON.parse(localStorage.getItem("user"));
-    if (user) {
-      setTeacherName(user.name);
-      setTeacherRole(user.role.charAt(0).toUpperCase() + user.role.slice(1));
-      fetchScheduledSessions(user.email);
+  const fetchSessions = useCallback(async () => {
+    try {
+      await keycloak.updateToken(5);
+      const res = await fetch('http://localhost:5000/api/training-sessions/mine', {
+        headers: {
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSessions(await res.json());
+    } catch (err) {
+      console.error('Error fetching sessions:', err);
     }
   }, []);
 
-  const fetchScheduledSessions = async (email) => {
-    try {
-      const res = await fetch(`http://localhost:5000/teacher/scheduled-classes?email=${email}`);
-      const data = await res.json();
-      setScheduledSessions(data);
-    } catch (error) {
-      console.error("Failed to fetch sessions", error);
-    }
+  useEffect(() => {
+    const load = async () => {
+      if (!keycloak.authenticated) {
+        await keycloak.init({ onLoad: 'login-required' });
+      }
+      await fetchSessions();
+    };
+    load();
+  }, [fetchSessions]);
+
+  const addSlot = () => {
+    if (!selectedDate || !selectedTime) return;
+    const slot = { date: selectedDate.toISOString(), time: selectedTime };
+    setNewSession(prev => ({
+      ...prev,
+      classDates: [...prev.classDates, slot]
+    }));
+    setSelectedDate(null);
+    setSelectedTime('');
   };
 
-  const handleSchedule = async (e) => {
-    e.preventDefault();
-    const user = JSON.parse(localStorage.getItem("user"));
+  const removeSlot = (index) => {
+    setNewSession(prev => ({
+      ...prev,
+      classDates: prev.classDates.filter((_, i) => i !== index)
+    }));
+  };
 
-    // Check if we have a user
-    if (!user) {
-      console.log("No user found!");
+  const handleCreate = async () => {
+    if (!newSession.title || !newSession.description || newSession.classDates.length === 0) {
+      alert('Please fill all required fields');
       return;
     }
 
     try {
-      const res = await fetch("http://localhost:5000/teacher/schedule-class", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          teacherEmail: user.email,
-          courseTitle,
-          dateTime,
-        }),
+      await keycloak.updateToken(5);
+      setLoading(true);
+      const res = await fetch('http://localhost:5000/api/training-sessions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newSession)
       });
-
-      if (res.ok) {
-        const data = await res.json();
-        setScheduledSessions([...scheduledSessions, data]);
-        setCourseTitle("");
-        setDateTime("");
-      } else {
-        console.error("Failed to schedule class:", res.status);
-      }
-    } catch (error) {
-      console.error("Error scheduling class:", error);
+      if (!res.ok) throw new Error(await res.text());
+      await fetchSessions();
+      setNewSession({ title: '', description: '', zoomLink: '', classDates: [], isLive: false });
+    } catch (err) {
+      console.error('Error creating session:', err);
+      alert(err.message);
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = () => {
-    keycloak.logout({ redirectUri: window.location.origin + '/login' }); // Redirect to the login page
+    keycloak.logout({ redirectUri: window.location.origin });
+  };
+
+  const formatDate = (dateString) => {
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
   return (
-    <>
-      {/* Header */}
-      <header className="header">
-        <section className="flex">
-          <a href="/teacher" className="logo">DRONE</a>
-          <form className="search-form">
-            <input type="text" name="search_box" required placeholder="Search..." maxLength="100" />
-            <button type="submit" className="fas fa-search"></button>
-          </form>
-          <div className="icons">
-            <div id="menu-btn" className="fas fa-bars"></div>
-            <div id="search-btn" className="fas fa-search"></div>
-            <div id="user-btn" className="fas fa-user"></div>
-            <div id="toggle-btn" className="fas fa-sun"></div>
-          </div>
-          <div className="profile">
-            <img src="/images/pic-1.jpg" className="image" alt="profile" />
-            <h3 className="name">{teacherName}</h3>
-            <p className="role">{teacherRole}</p>
-            <a href="/profile" className="btn">View Profile</a>
-            
-          </div>
-        </section>
+    <div className="teacher-dashboard">
+      <header className="dashboard-header">
+        <h1>Teacher Dashboard</h1>
+        
+        <div className="user-info">
+          <span>{keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username}</span>
+          <button onClick={handleLogout} className="logout-btn">
+            Logout
+          </button>
+        </div>
       </header>
 
-      {/* Sidebar */}
-      <div className="side-bar">
-        <div id="close-btn"><i className="fas fa-times"></i></div>
-        <div className="profile">
-          <img src="/images/pic-1.jpg" className="image" alt="profile" />
-          <h3 className="name">{teacherName}</h3>
-          <p className="role">{teacherRole}</p>
-          <a href="/profile" className="btn">View Profile</a>
-        </div>
-        <nav className="navbar">
-          <a href="/teacher"><i className="fas fa-home"></i><span>Home</span></a>
-          <a href="#"><i className="fas fa-users"></i><span>Course Roster</span></a>
-          <a href="#schedule-section"><i className="fas fa-calendar-alt"></i><span>Schedule Classes</span></a>
-        </nav>
-      </div>
-      <div className="flex-btn">
-              <button onClick={handleLogout} className="option-btn">Logout</button>
-            </div>
-      {/* Main Dashboard */}
-      <section className="home-grid">
-        <h1 className="heading">Teacher Quick Actions</h1>
-        <div className="box-container">
-          <div className="box">
-            <h3 className="title">Manage</h3>
-            <div className="flex">
-              <a href="#"><i className="fas fa-book"></i><span>Materials</span></a>
-              <a href="#"><i className="fas fa-user-edit"></i><span>Attendance</span></a>
-              <a href="#"><i className="fas fa-clipboard-check"></i><span>Assessments</span></a>
-            </div>
-          </div>
-        </div>
+      <nav className="dashboard-nav">
+        <button 
+          className={`nav-btn ${activeTab === 'create' ? 'active' : ''}`}
+          onClick={() => setActiveTab('create')}
+        >
+          Create Session
+        </button>
+        <button 
+          className={`nav-btn ${activeTab === 'view' ? 'active' : ''}`}
+          onClick={() => setActiveTab('view')}
+        >
+          My Sessions
+        </button>
+      </nav>
 
-        {/* Schedule Section */}
-        <div id="schedule-section">
-          <h2 className="heading">Schedule a Class</h2>
-          <form onSubmit={handleSchedule} className="form-container">
-            <input
-              type="text"
-              placeholder="Course Title"
-              value={courseTitle}
-              onChange={(e) => setCourseTitle(e.target.value)}
-              required
-            />
-            <input
-              type="datetime-local"
-              value={dateTime}
-              onChange={(e) => setDateTime(e.target.value)}
-              required
-            />
-            <button type="submit" className="btn">Schedule</button>
-          </form>
+      <main className="dashboard-main">
+        {activeTab === 'create' && (
+          <section className="create-session">
+            <h2>Create Training Session</h2>
+            <div className="form-group">
+              <label>Title*</label>
+              <input
+                placeholder="Session title"
+                value={newSession.title}
+                onChange={e => setNewSession({ ...newSession, title: e.target.value })}
+              />
+            </div>
 
-          <h2 className="heading">logout</h2>
-          <div className="box-container">
-            {scheduledSessions.length === 0 ? (
-              <p>No scheduled classes yet.</p>
-            ) : (
-              scheduledSessions.map((session, idx) => (
-                <div key={idx} className="box">
-                  <h3>{session.courseTitle}</h3>
-                  <p><strong>Date & Time:</strong> {new Date(session.dateTime).toLocaleString()}</p>
-                </div>
-              ))
+            <div className="form-group">
+              <label>Description*</label>
+              <textarea
+                placeholder="Session description"
+                value={newSession.description}
+                onChange={e => setNewSession({ ...newSession, description: e.target.value })}
+              />
+            </div>
+
+            <div className="session-type">
+              <label className={`type-option ${newSession.isLive ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="sessionType"
+                  checked={newSession.isLive}
+                  onChange={() => setNewSession({ ...newSession, isLive: true })}
+                />
+                <span>Live (Physical)</span>
+              </label>
+              <label className={`type-option ${!newSession.isLive ? 'active' : ''}`}>
+                <input
+                  type="radio"
+                  name="sessionType"
+                  checked={!newSession.isLive}
+                  onChange={() => setNewSession({ ...newSession, isLive: false })}
+                />
+                <span>Online (Zoom)</span>
+              </label>
+            </div>
+
+            {!newSession.isLive && (
+              <div className="form-group">
+                <label>Zoom Link</label>
+                <input
+                  placeholder="https://zoom.us/j/..."
+                  value={newSession.zoomLink}
+                  onChange={e => setNewSession({ ...newSession, zoomLink: e.target.value })}
+                />
+              </div>
             )}
-          </div>
-        </div>
-      </section>
-    </>
+
+            <div className="form-group">
+              <label>Add Time Slots*</label>
+              <div className="slot-picker">
+                <Calendar
+                  onChange={setSelectedDate}
+                  value={selectedDate}
+                  minDate={new Date()}
+                />
+                <div className="time-input">
+                  <input
+                    type="time"
+                    value={selectedTime}
+                    onChange={e => setSelectedTime(e.target.value)}
+                  />
+                  <button onClick={addSlot} className="add-slot-btn">
+                    Add Slot
+                  </button>
+                </div>
+              </div>
+
+              <div className="slot-list">
+                {newSession.classDates.map((slot, i) => (
+                  <div key={i} className="slot-item">
+                    <span>{formatDate(slot.date)} at {slot.time}</span>
+                    <button onClick={() => removeSlot(i)} className="remove-slot">
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleCreate}
+              disabled={loading}
+              className="submit-btn"
+            >
+              {loading ? 'Creating...' : 'Create Session'}
+            </button>
+          </section>
+        )}
+
+        {activeTab === 'view' && (
+          <section className="session-list">
+            <h2>My Training Sessions</h2>
+            {sessions.length === 0 ? (
+              <div className="empty-state">
+                <p>No sessions created yet</p>
+              </div>
+            ) : (
+              <div className="sessions-grid">
+                {sessions.map(session => (
+                  <div key={session._id} className="session-card">
+                    <div className="card-header">
+                      <h3>{session.title}</h3>
+                      <span className={`session-type ${session.isLive ? 'live' : 'online'}`}>
+                        {session.isLive ? 'Live' : 'Online'}
+                      </span>
+                    </div>
+                    <p className="card-description">{session.description}</p>
+                    
+                    {session.zoomLink && (
+                      <div className="zoom-link">
+                        <a href={session.zoomLink} target="_blank" rel="noopener noreferrer">
+                          Join Zoom Meeting
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="card-slots">
+                      <h4>Scheduled Slots:</h4>
+                      <ul>
+                        {session.classDates.map((slot, i) => (
+                          <li key={i}>
+                            {formatDate(slot.date)} at {slot.time}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div className="card-enrollment">
+                      <h4>Enrolled Students ({session.enrolledStudents.length}):</h4>
+                      {session.enrolledStudents.length > 0 ? (
+                        <ul>
+                          {session.enrolledStudents.map((student, i) => (
+                            <li key={i}>{student}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p>No students enrolled yet</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </main>
+    </div>
   );
 };
 

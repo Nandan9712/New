@@ -1,84 +1,66 @@
+// server.js
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const session = require('express-session');
 const { keycloak, memoryStore } = require('./keycloak-config');
+const trainingSessionsRoutes = require('./routes/trainingSessions');
+const studentRoutes = require('./routes/student');
+const examRoutes = require('./routes/exams');
+const availabilityRoutes = require('./routes/availability');
+const coordinatorRoutes = require('./routes/coordinator');
+
 
 const app = express();
 
-// Enable CORS for frontend
+// CORS
 app.use(cors({
   origin: 'http://localhost:5173',
   credentials: true,
 }));
 
-// Parse JSON
+// JSON parser
 app.use(express.json());
 
-// Setup session (required for keycloak-connect)
-app.use(
-  session({
-    secret: '9df3c06d1c1d553c934105cef7469f8cfb835236fc18a1b42e6349e992b7d5a3',
-    resave: false,
-    saveUninitialized: true,
-    store: memoryStore,
-  })
-);
+// session for keycloak-connect
+app.use(session({
+  secret: '9df3c06d1c1d553c934105cef7469f8cfb835236fc18a1b42e6349e992b7d5a3',
+  resave: false,
+  saveUninitialized: true,
+  store: memoryStore,
+}));
 
-// Initialize Keycloak middleware
+// Keycloak
 app.use(keycloak.middleware());
 
-// MongoDB connection
-mongoose.connect('mongodb://localhost:27017/drone_cert', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-});
-mongoose.set('strictQuery', true);
-
-// Middleware to extract user info and attach to request (including email)
+// Extract user info into req.user
 app.use((req, res, next) => {
   if (req.kauth && req.kauth.grant) {
-    const tokenContent = req.kauth.grant.access_token.content;
+    const c = req.kauth.grant.access_token.content;
     req.user = {
-      email: tokenContent.email,
-      name: tokenContent.name,
-      preferred_username: tokenContent.preferred_username,
-      roles: tokenContent.realm_access?.roles || [],
+      email: c.email,
+      name: c.name,
+      preferred_username: c.preferred_username,
+      roles: c.realm_access?.roles || [],
     };
   }
   next();
 });
 
-// === ROUTES ===
-app.use('/teacher', require('./routes/teacher'));
-app.use('/student', require('./routes/student'));
-app.use('/api', require('./routes/classSessionRoutes'));
-app.use('/api/examiner', require('./routes/examinerSlots'));
-
-// Protected route to add class session (Teacher only)
-const ClassSession = require('./models/ClassSession');
-app.post('/add-session', keycloak.protect('realm:teacher'), async (req, res) => {
-  try {
-    const { courseId, dateTime } = req.body;
-
-    if (!courseId || !dateTime) {
-      return res.status(400).json({ error: 'CourseId and dateTime are required' });
-    }
-
-    const newSession = new ClassSession({
-      courseId,
-      dateTime: new Date(dateTime),
-    });
-
-    await newSession.save();
-    res.status(201).json({ message: 'Session added successfully' });
-  } catch (error) {
-    console.error('Error adding session:', error);
-    res.status(500).json({ error: 'Failed to add session' });
-  }
+// Connect MongoDB
+mongoose.connect('mongodb://localhost:27017/drone_cert', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
 });
-
-// Start server
+mongoose.set('strictQuery', true);
+app.get('/ping', (req, res) => res.send('pong'));
+// Routes
+app.use('/api/training-sessions', trainingSessionsRoutes);
+app.use('/api/student', studentRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/availability', availabilityRoutes);
+app.use('/api/coordinator', coordinatorRoutes);
+// Start
 app.listen(5000, () => {
-  console.log('🚀 Server running at http://localhost:5000');
+  console.log('🚀 Server running on http://localhost:5000');
 });

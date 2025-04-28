@@ -12,6 +12,8 @@ const Login = () => {
       window.location.href = '/teacher';
     } else if (roles?.includes('examiner')) {
       window.location.href = '/examiner';
+    } else if (roles?.includes('coordinator')) {
+      window.location.href = '/coordinator';  // Redirect to coordinator dashboard
     }
   }, []);
 
