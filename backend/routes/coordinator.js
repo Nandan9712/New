@@ -43,6 +43,7 @@ router.get(
 );
 
 // 2️⃣ Schedule a new exam (auto-assign the least busy available examiner)
+// 2️⃣ Schedule a new exam (auto-assign the least busy available examiner)
 router.post(
   '/exams/schedule',
   keycloak.protect('realm:coordinator'),
@@ -55,7 +56,7 @@ router.post(
     try {
       // compute time window
       const slotStart = new Date(`${date}T${time}`);
-      const EXAM_DURATION = 60 * 60 * 1000; // 1h
+      const EXAM_DURATION = 60 * 60 * 1000; // 1 hour
       const slotEnd = new Date(slotStart.getTime() + EXAM_DURATION);
 
       // find examiners free at that time
@@ -68,9 +69,33 @@ router.post(
         return res.status(404).json({ message: 'No examiner available at that time' });
       }
 
-      // pick the least-loaded examiner
+      // pick the least-loaded examiner who ALSO has no clash within 4 hours
+      const FOUR_HOURS = 4 * 60 * 60 * 1000; // 4 hours in ms
+
+      const availableCandidates = [];
+
+      for (const examinerId of candidates) {
+        // fetch future exams for this examiner
+        const futureExams = await Exam.find({ assignedExaminer: examinerId });
+
+        const hasClash = futureExams.some(exam => {
+          const examStart = new Date(`${exam.date.toISOString().split('T')[0]}T${exam.time}`);
+          const timeDiff = Math.abs(examStart - slotStart); // time difference in ms
+          return timeDiff < FOUR_HOURS;
+        });
+
+        if (!hasClash) {
+          availableCandidates.push(examinerId);
+        }
+      }
+
+      if (!availableCandidates.length) {
+        return res.status(400).json({ message: 'No examiner available with 4-hour gap requirement' });
+      }
+
+      // Now pick the least-loaded examiner among filtered candidates
       const load = await Promise.all(
-        candidates.map(async (id) => ({
+        availableCandidates.map(async (id) => ({
           id,
           count: await Exam.countDocuments({
             assignedExaminer: id,
@@ -79,7 +104,7 @@ router.post(
         }))
       );
       load.sort((a, b) => a.count - b.count);
-      const assigned = load[0].id; // this is a string
+      const assigned = load[0].id;
 
       // create the exam
       const exam = new Exam({
@@ -90,7 +115,7 @@ router.post(
         onlineLink: isOnline ? onlineLink : undefined,
         location: !isOnline ? location : undefined,
         createdBy: req.user.email,
-        assignedExaminer: assigned   // plain string, no cast
+        assignedExaminer: assigned
       });
 
       await exam.save();

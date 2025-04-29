@@ -1,31 +1,69 @@
 const express = require('express');
 const router = express.Router();
 const Availability = require('../models/Availability');
+const jwt = require('jsonwebtoken');
 
-// Middleware to check if user is authenticated (assume you have this)
 const requireAuth = async (req, res, next) => {
-  if (!req.headers.authorization) {
-    return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    if (!req.headers.authorization) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
+    const token = req.headers.authorization.split(' ')[1];
+    const decoded = jwt.decode(token); // or use jwt.verify() if you have the Keycloak public key
+
+    req.user = { id: decoded.sub }; // usually 'sub' contains the user ID in Keycloak tokens
+
+    next();
+  } catch (err) {
+    console.error('Authorization error:', err);
+    res.status(401).json({ message: 'Unauthorized' });
   }
-  const token = req.headers.authorization.split(' ')[1];
-  // Normally you would verify token and decode user info
-  // For now assume user ID or email is inside token somehow (or you pass it manually for testing)
-  req.user = { id: "mock-user-id" }; // Replace this later with real Keycloak decoding
-  next();
 };
 
+
 // Create Availability
+// Updated Create Availability endpoint
 router.post('/', requireAuth, async (req, res) => {
   try {
     const { availableFrom, availableTo } = req.body;
     if (!availableFrom || !availableTo) {
       return res.status(400).json({ message: 'Both availableFrom and availableTo are required' });
     }
+
+    // Convert to Date objects for comparison
+    const newFrom = new Date(availableFrom);
+    const newTo = new Date(availableTo);
+
+    // Check if end time is after start time
+    if (newTo <= newFrom) {
+      return res.status(400).json({ message: 'End time must be after start time' });
+    }
+
+    // Check for overlapping availabilities
+    const overlapping = await Availability.findOne({
+      examinerId: req.user.id,
+      $or: [
+        { 
+          availableFrom: { $lt: newTo }, 
+          availableTo: { $gt: newFrom } 
+        }
+      ]
+    });
+
+    if (overlapping) {
+      return res.status(400).json({ 
+        message: 'This availability overlaps with an existing one',
+        conflictingAvailability: overlapping
+      });
+    }
+
     const availability = new Availability({
       examinerId: req.user.id,
-      availableFrom,
-      availableTo
+      availableFrom: newFrom,
+      availableTo: newTo
     });
+
     await availability.save();
     res.status(201).json(availability);
   } catch (err) {
@@ -33,7 +71,6 @@ router.post('/', requireAuth, async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 });
-
 // Get my Availabilities
 router.get('/mine', requireAuth, async (req, res) => {
   try {

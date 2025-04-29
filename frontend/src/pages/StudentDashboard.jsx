@@ -294,24 +294,35 @@ export default function StudentDashboard() {
             </div>
 
             {filteredAllSessions.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-">
                 <FiCalendar className="mx-auto text-4xl text-gray-300 mb-3" />
                 <p className="text-gray-500">No sessions available matching your search</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-6 ">
                 {filteredAllSessions.map(session => {
                   const teacherEmail = session.createdBy || "teacher@example.com";
-                  const teacherName = teacherEmail.split('@')[0].replace('.', ' ');
+                  const teacherNameParts = teacherEmail.split('@')[0].split('.');
+                  const teacherFirstName = session.teacherFirstName || session.createdBy.split('@')[0].split('.')[0]; // Default to email split logic
+                  const teacherLastName = session.teacherLastName || session.createdBy.split('@')[0].split('.')[1] || '';
+              
+                  // Capitalize first letters of the first and last name
+                  const formattedTeacherFirstName = teacherFirstName.charAt(0).toUpperCase() + teacherFirstName.slice(1);
+                  const formattedTeacherLastName = teacherLastName ? teacherLastName.charAt(0).toUpperCase() + teacherLastName.slice(1) : '';
+
                   const isEnrolled = mySessions.some(ms => ms._id === session._id);
                   const enrollmentCount = session.enrolledStudents?.length || 0;
                   
                   return (
-                    <div key={session._id} className="border rounded-lg p-5 hover:shadow-lg transition-all duration-200 bg-white">
+                    <div key={session._id} className=" border-2 border-gray-300 rounded-lg p-10 hover:shadow-lg transition-all duration-200 bg-white flex gap-2 items-center">
+                      <div>
+                        <img src="https://cdn.dribbble.com/userupload/8401360/file/still-2aab62b732c77245f4eeb7edf4c68c9e.gif?format=webp&resize=450x338&vertical=center" alt="" className='h-40 w-40' />
+                      </div>
+                      <div>
                       {/* Session Header */}
-                      <div className="flex justify-between items-start mb-3">
+                      <div className="flex justify-between items-start mb-3 max-w-[80%]">
                         <h3 className="font-bold text-lg text-gray-800 capitalize">
-                          {session.title.toLowerCase() || "new session"}
+                          {session.title || "new session"}
                         </h3>
                         <div className="flex space-x-2">
                           {session.isLive && (
@@ -337,7 +348,7 @@ export default function StudentDashboard() {
                         <div className="space-y-2 text-sm">
                           <div className="flex items-center text-gray-700">
                             <FiUser className="mr-2 text-gray-500" />
-                            <span>Teacher: <span className="font-medium capitalize">{teacherName}</span></span>
+                            <span>Instructor: <span className="font-medium capitalize">{formattedTeacherFirstName}</span></span>
                           </div>
                           
                           {session.classDates?.length > 0 && (
@@ -386,11 +397,12 @@ export default function StudentDashboard() {
                         ) : (
                           <button
                             onClick={() => enroll(session._id)}
-                            className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+                            className="text-sm bg-blue-600 hover:bg-blue-700 text-black px-4 py-2 rounded-lg transition-colors"
                           >
                             Enroll Now
                           </button>
                         )}
+                      </div>
                       </div>
                     </div>
                   );
@@ -410,7 +422,7 @@ export default function StudentDashboard() {
                 <p className="text-gray-500">No exams scheduled</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="">
                 {filteredExams.map(exam => (
                   <div key={exam._id} className="border rounded-lg p-5 hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-3">
@@ -442,16 +454,11 @@ export default function StudentDashboard() {
                         <span>{exam.isOnline ? 'Online Exam' : exam.location || "Location not specified"}</span>
                       </div>
                       
-                      <div className="flex items-center text-gray-700">
-                        <FiUser className="mr-2" />
-                        <span>Proctor: {exam.proctor || "Not assigned"}</span>
-                      </div>
+                      
                     </div>
                     
                     <div className="mt-4 pt-3 border-t flex justify-between items-center">
-                      <span className="text-xs text-gray-500">
-                        Duration: {exam.duration || "Not specified"}
-                      </span>
+                      
                       <button className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-1 rounded-full">
                         View Details
                       </button>

@@ -300,13 +300,15 @@ export default function CoordinatorDashboard() {
             ) : (
               <div className="exams-grid">
                 {exams.map(ex => (
-                  <div key={ex._id} className="exam-card">
-                    <div className="card-header">
-                      <h3 className="exam-title">{ex.sessionId.title}</h3>
-                      <span className={`exam-mode ${ex.isOnline ? 'online' : 'offline'}`}>
-                        {ex.isOnline ? 'Online' : 'Offline'}
-                      </span>
-                    </div>
+  <div key={ex._id} className="exam-card">
+    <div className="card-header">
+      <h3 className="exam-title">
+        {ex.sessionId?.title || 'Session not found'}
+      </h3>
+      <span className={`exam-mode ${ex.isOnline ? 'online' : 'offline'}`}>
+        {ex.isOnline ? 'Online' : 'Offline'}
+      </span>
+    </div>
                     
                     <div className="exam-details">
                       <div className="detail-item">
