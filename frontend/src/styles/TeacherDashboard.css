@@ -1,11 +1,11 @@
 /* Base Styles */
 .teacher-dashboard {
  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    max-width: 1200px;
+    
     margin: 0 auto;
     padding: 20px;
     color: #333;
-    width: 2500px;
+    width: 1500px;
   }
   
   .dashboard-header {
@@ -332,11 +332,11 @@
     .sessions-grid {
       grid-template-columns: 1fr;
     }
-    .search-container input {
-        width: 100%;
-      }
-      
-      .sessions-container {
-        grid-template-columns: 1fr;
-      }
+     .search-container input {
+    width: 100%;
+  }
+  
+  .sessions-container {
+    grid-template-columns: 1fr;
+  }
   }

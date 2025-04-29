@@ -245,7 +245,7 @@ const TeacherDashboard = () => {
                   checked={newSession.isLive}
                   onChange={() => setNewSession({ ...newSession, isLive: true })}
                 />
-                <span>Live (Physical)</span>
+                <span>Offline</span>
               </label>
               <label className={`type-option ${!newSession.isLive ? 'active' : ''}`}>
                 <input
@@ -254,7 +254,7 @@ const TeacherDashboard = () => {
                   checked={!newSession.isLive}
                   onChange={() => setNewSession({ ...newSession, isLive: false })}
                 />
-                <span>Online (Zoom)</span>
+                <span>Online </span>
               </label>
             </div>
 
@@ -269,9 +269,9 @@ const TeacherDashboard = () => {
               </div>
             ) : (
               <div className="form-group">
-                <label>Zoom Link*</label>
+                <label>Meeting Link</label>
                 <input
-                  placeholder="https://zoom.us/j/..."
+                  placeholder="https://meeting.us/j/..."
                   value={newSession.zoomLink}
                   onChange={e => setNewSession({ ...newSession, zoomLink: e.target.value })}
                 />
@@ -338,7 +338,7 @@ const TeacherDashboard = () => {
             <div className="card-header">
               <h3>{session.title}</h3>
               <span className={`session-type ${session.isLive ? 'live' : 'online'}`}>
-                {session.isLive ? 'Live' : 'Online'}
+                {session.isLive ? 'Offline' : 'Online'}
               </span>
             </div>
 
@@ -349,7 +349,7 @@ const TeacherDashboard = () => {
             ) : (
               <div className="zoom-link">
                 <a href={session.zoomLink} target="_blank" rel="noopener noreferrer">
-                  Join Zoom Meeting
+                  Join Meeting
                 </a>
               </div>
             )}

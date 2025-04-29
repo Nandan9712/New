@@ -328,7 +328,7 @@ export default function StudentDashboard() {
                           {session.isLive && (
                             <span className="bg-red-100 text-red-800 text-xs px-2 py-1 rounded-full flex items-center">
                               <span className="w-2 h-2 bg-red-500 rounded-full mr-1 animate-pulse"></span>
-                              Live
+                              Offline
                             </span>
                           )}
                           <span className={`text-xs px-2 py-1 rounded-full ${
@@ -422,7 +422,7 @@ export default function StudentDashboard() {
                 <p className="text-gray-500">No exams scheduled</p>
               </div>
             ) : (
-              <div className="">
+              <div className="space-y-4">
                 {filteredExams.map(exam => (
                   <div key={exam._id} className="border rounded-lg p-5 hover:shadow-md transition-shadow">
                     <div className="flex justify-between items-start mb-3">
@@ -498,12 +498,7 @@ export default function StudentDashboard() {
                   <h3 className="font-medium text-gray-700 mb-3">Account Details</h3>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-sm text-gray-500">Account Created</p>
-                      <p className="font-medium">
-                        {keycloak.tokenParsed?.createdTimestamp 
-                          ? new Date(keycloak.tokenParsed.createdTimestamp * 1000).toLocaleDateString() 
-                          : 'Not available'}
-                      </p>
+                      
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Last Login</p>
