@@ -193,7 +193,15 @@ const TeacherDashboard = () => {
   return (
     <div className="teacher-dashboard">
       <header className="dashboard-header">
-        <h1>Trainer Dashboard</h1>
+       
+      <div className="bg-white shadow-md rounded p-6 flex items-center space-x-6">
+  <img 
+    src="https://thumbs.dreamstime.com/b/education-logo-vector-icon-illustration-uniform-ceremony-people-graduating-graduation-success-study-hat-knowledge-graduate-diploma-169347309.jpg" 
+    alt="Trainer" 
+    className="h-24 w-24 object-contain"
+  />
+  <h1 className="text-2xl font-semibold text-gray-800">Trainer Dashboard</h1>
+</div>
         <div className="user-info">
           <span>{keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username}</span>
           <button onClick={handleLogout} className="logout-btn">Logout</button>

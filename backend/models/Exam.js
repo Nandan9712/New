@@ -9,6 +9,7 @@ const examSchema = new mongoose.Schema({
   location: { type: String },
   createdBy: { type: String, required: true },
   assignedExaminer:  { type: String, required: true },
+  duration: { type: Number, required: true },
 });
 
 module.exports = mongoose.model('Exam', examSchema);

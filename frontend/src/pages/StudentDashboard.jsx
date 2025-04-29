@@ -441,7 +441,9 @@ export default function StudentDashboard() {
                                 }) 
                               : "Date not set"} at {exam.time || "Time not set"}
                           </span>
+                          
                         </div>
+                        
                       </div>
                       <div className="bg-purple-100 p-2 rounded-full">
                         <FiBook className="text-purple-600 text-xl" />

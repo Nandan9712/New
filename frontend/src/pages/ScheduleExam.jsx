@@ -15,6 +15,7 @@ export default function ScheduleExam({ examId }) {
     isOnline:   true,
     onlineLink: '',
     location:   '',
+    duration:   60, // default duration in minutes
   });
   const [loading, setLoading] = useState(false);
 

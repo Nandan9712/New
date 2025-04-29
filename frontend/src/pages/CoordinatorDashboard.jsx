@@ -9,6 +9,7 @@ export default function CoordinatorDashboard() {
   const [sessionId, setSessionId] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
+  const [selectedDuration, setSelectedDuration] = useState('60');
   const [isOnline, setIsOnline] = useState(false);
   const [onlineLink, setOnlineLink] = useState('');
   const [location, setLocation] = useState('');
@@ -85,6 +86,7 @@ export default function CoordinatorDashboard() {
         setSessionId('');
         setDate('');
         setTime('');
+        setSelectedDuration('60');
         setIsOnline(false);
         setOnlineLink('');
         setLocation('');
@@ -208,6 +210,15 @@ export default function CoordinatorDashboard() {
                   />
                 </div>
               </div>
+              <div className="form-group">
+              <label>Duration (minutes)*</label>
+              <input
+                type="number"
+                min="1"
+                value={selectedDuration}
+                onChange={e => setSelectedDuration(e.target.value)}
+              />
+            </div>
             </div>
 
             <div className="form-group">
