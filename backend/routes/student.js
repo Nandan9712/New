@@ -4,6 +4,7 @@ const TrainingSession = require('../models/TrainingSession');
 const Enrollment      = require('../models/Enrollment');
 const { keycloak }    = require('../keycloak-config');
 const Exam          = require('../models/Exam'); 
+const { sendEmail } = require('../utils/emailService');
 const router = express.Router();
 
 // 1️⃣ List all sessions (teacher-created)
@@ -23,36 +24,52 @@ router.get(
 
 // 2️⃣ Enroll in a session by its ID
 router.post(
-    '/sessions/:id/enroll',
-    keycloak.protect('realm:student'),
-    async (req, res) => {
-      try {
-        const sessionId = req.params.id;
-        const email = req.user.email;
-  
-        // prevent double-enroll
-        const exists = await Enrollment.findOne({ sessionId, studentEmail: email });
-        if (exists) return res.status(400).json({ message: 'Already enrolled' });
-  
-        // save Enrollment
-        const e = new Enrollment({ sessionId, studentEmail: email });
-        await e.save();
-  
-        // 💥 Also update TrainingSession
-        await TrainingSession.findByIdAndUpdate(
-          sessionId,
-          { $addToSet: { enrolledStudents: email } }  // use $addToSet to prevent duplicates
-        );
-  
-        res.json({ message: 'Enrolled successfully' });
-      } catch (err) {
-        console.error('POST /sessions/:id/enroll error', err);
-        res.status(500).json({ message: err.message });
-      }
-    }
-  );
-  
+  '/sessions/:id/enroll',
+  keycloak.protect('realm:student'),
+  async (req, res) => {
+    try {
+      const sessionId = req.params.id;
+      const { email, name } = req.user;
+      const studentName = name || req.user.preferred_username || 'Student';
 
+      // Check existing enrollment
+      if (await Enrollment.findOne({ sessionId, studentEmail: email })) {
+        return res.status(400).json({ message: 'Already enrolled' });
+      }
+
+      // Get session details
+      const session = await TrainingSession.findById(sessionId);
+      if (!session) return res.status(404).json({ message: 'Session not found' });
+
+      // Save enrollment
+      await new Enrollment({ sessionId, studentEmail: email }).save();
+      await TrainingSession.findByIdAndUpdate(
+        sessionId,
+        { $addToSet: { enrolledStudents: email } }
+      );
+
+      // Send notification
+      await sendEmail({
+        to: '01fe22bcs217@kletech.ac.in',
+        subject: `New Enrollment: ${session.title}`,
+        html: `
+          <h2>New Enrollment Notification</h2>
+          <p><strong>Student:</strong> ${studentName} (${email})</p>
+          <p><strong>Session:</strong> ${session.title}</p>
+          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
+        `
+      });
+
+      res.json({ success: true, message: 'Enrolled successfully' });
+    } catch (error) {
+      console.error('Enrollment error:', error);
+      res.status(500).json({ 
+        success: false,
+        message: error.response || error.message 
+      });
+    }
+  }
+);
 // 3️⃣ Get sessions this student is enrolled in
 router.get(
   '/sessions/mine',

@@ -1,4 +1,5 @@
 // src/App.jsx
+import './App.css'
 import React, { useEffect, useState } from 'react';
 import keycloak from './keycloak';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';

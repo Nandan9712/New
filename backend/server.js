@@ -1,7 +1,9 @@
 // server.js
 const express = require('express');
+require('dotenv').config();
 const mongoose = require('mongoose');
 const cors = require('cors');
+const { sendEmail } = require('./utils/emailService');
 const session = require('express-session');
 const { keycloak, memoryStore } = require('./keycloak-config');
 const trainingSessionsRoutes = require('./routes/trainingSessions');
@@ -9,6 +11,7 @@ const studentRoutes = require('./routes/student');
 const examRoutes = require('./routes/exams');
 const availabilityRoutes = require('./routes/availability');
 const coordinatorRoutes = require('./routes/coordinator');
+ // Load .env
 
 
 const app = express();
@@ -55,11 +58,13 @@ mongoose.connect('mongodb://localhost:27017/drone_cert', {
 mongoose.set('strictQuery', true);
 app.get('/ping', (req, res) => res.send('pong'));
 // Routes
+
 app.use('/api/training-sessions', trainingSessionsRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/exams', examRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
+app.use('/email', require('./routes/emailTest'));
 // Start
 app.listen(5000, () => {
   console.log('🚀 Server running on http://localhost:5000');
