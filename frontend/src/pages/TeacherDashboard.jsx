@@ -2,7 +2,6 @@ import React, { useEffect, useState, useCallback } from 'react';
 import keycloak from '../keycloak';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import '../styles/TeacherDashboard.css';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -44,7 +43,7 @@ const TeacherDashboard = () => {
       data.forEach(session => {
         session.classDates.forEach(slot => {
           const date = new Date(slot.date);
-          const key = date.toISOString().split('T')[0]; // Use ISO format for consistency
+          const key = date.toISOString().split('T')[0];
           if (!newHighlightDates[key]) newHighlightDates[key] = [];
           newHighlightDates[key].push(session);
         });
@@ -73,7 +72,7 @@ const TeacherDashboard = () => {
     
     for (let i = 0; i < weeks; i++) {
       const date = new Date(selectedDate);
-      date.setDate(date.getDate() + (i * 7)); // Add i weeks to the date
+      date.setDate(date.getDate() + (i * 7));
       
       slots.push({ 
         date: date.toISOString(), 
@@ -225,7 +224,7 @@ const TeacherDashboard = () => {
   const tileClassName = ({ date, view }) => {
     if (view !== 'month') return null;
     const dateKey = date.toISOString().split('T')[0];
-    return highlightDates[dateKey] ? 'bg-blue-50 relative' : null;
+    return highlightDates[dateKey] ? 'relative bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200' : null;
   };
 
   // Calendar content for days with sessions (blue dot indicator)
@@ -233,7 +232,7 @@ const TeacherDashboard = () => {
     if (view !== 'month') return null;
     const dateKey = date.toISOString().split('T')[0];
     return highlightDates[dateKey] ? (
-      <div className="absolute top-1 right-1 h-2 w-2 bg-blue-500 rounded-full"></div>
+      <div className="absolute top-1 right-1 h-2 w-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full shadow-sm"></div>
     ) : null;
   };
 
@@ -255,300 +254,396 @@ const TeacherDashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-200 flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 flex flex-col">
       {/* Header Section */}
-      <header className="flex justify-between items-center p-6 bg-blue-600 text-white fixed top-0 left-0 w-full z-50">
-        <div className="flex items-center space-x-4">
-          <img 
-            src="https://thumbs.dreamstime.com/b/education-logo-vector-icon-illustration-uniform-ceremony-people-graduating-graduation-success-study-hat-knowledge-graduate-diploma-169347309.jpg" 
-            alt="Trainer" 
-            className="h-10 w-10 object-contain"
-          />
-          <h1 className="text-2xl font-bold">Trainer Dashboard</h1>
-        </div>
-        <div className="flex items-center space-x-4">
-          <span>{keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username}</span>
-          <button
-            onClick={handleLogout}
-            className="bg-red-500 px-4 py-2 rounded text-white hover:bg-red-600"
-          >
-            Logout
-          </button>
+      <header className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-700 shadow-lg border-b border-blue-500/30">
+        <div className="flex justify-between items-center p-6 text-white">
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <img 
+                src="https://thumbs.dreamstime.com/b/education-logo-vector-icon-illustration-uniform-ceremony-people-graduating-graduation-success-study-hat-knowledge-graduate-diploma-169347309.jpg" 
+                alt="Trainer" 
+                className="h-12 w-12 object-contain rounded-xl bg-white/10 p-1 backdrop-blur-sm border border-white/20"
+              />
+              <div className="absolute -inset-1 bg-blue-400/20 rounded-xl blur-sm -z-10"></div>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
+                Trainer Dashboard
+              </h1>
+              <p className="text-blue-100/80 text-sm">Manage your training sessions</p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-4">
+            <div className="text-right">
+              <p className="font-medium">{keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username}</p>
+              <p className="text-blue-100/70 text-sm">Trainer</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 px-6 py-2 rounded-xl font-medium transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:shadow-xl"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Main Content Section */}
-      <main className="flex flex-1 flex-col md:flex-row mt-24">
+      <main className="flex-1 flex flex-col lg:flex-row p-6 gap-6 max-w-7xl mx-auto w-full">
         {/* Left Column: Content */}
-        <section className="flex-1 p-6">
+        <section className="flex-1">
           {/* Navigation Tabs */}
-          <div className="flex mb-6 border-b border-gray-200">
-            <button
-              className={`py-2 px-4 font-medium ${activeTab === 'create' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => setActiveTab('create')}
-            >
-              Create Session
-            </button>
-            <button
-              className={`py-2 px-4 font-medium ${activeTab === 'view' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}
-              onClick={() => setActiveTab('view')}
-            >
-              My Sessions
-            </button>
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-1 mb-6">
+            <div className="flex">
+              <button
+                className={`flex-1 py-3 px-6 font-semibold rounded-xl transition-all duration-200 ${
+                  activeTab === 'create' 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+                onClick={() => setActiveTab('create')}
+              >
+                Create Session
+              </button>
+              <button
+                className={`flex-1 py-3 px-6 font-semibold rounded-xl transition-all duration-200 ${
+                  activeTab === 'view' 
+                    ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg' 
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-white/50'
+                }`}
+                onClick={() => setActiveTab('view')}
+              >
+                My Sessions
+              </button>
+            </div>
           </div>
 
           {activeTab === 'create' && (
-            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-              <h2 className="text-xl font-bold mb-4">Create Training Session</h2>
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 overflow-hidden">
+              <div className="p-8">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-2">
+                  Create Training Session
+                </h2>
+                <p className="text-gray-600 mb-6">Schedule new training sessions for your students</p>
 
-              {!showForm && (
-                <div className="text-center mb-4">
-                  <button
-                    onClick={() => setShowForm(true)}
-                    className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-                  >
-                    Schedule Class
-                  </button>
-                </div>
-              )}
-
-              {showForm && (
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Title*</label>
-                    <input
-                      className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Session title"
-                      value={newSession.title}
-                      onChange={e => setNewSession({ ...newSession, title: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description*</label>
-                    <textarea
-                      className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="Session description"
-                      value={newSession.description}
-                      onChange={e => setNewSession({ ...newSession, description: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex space-x-4">
-                    <label className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${newSession.isLive ? 'bg-blue-100 text-blue-800' : 'bg-gray-100'}`}>
-                      <input
-                        type="radio"
-                        name="sessionType"
-                        checked={newSession.isLive}
-                        onChange={() => setNewSession({ ...newSession, isLive: true })}
-                        className="focus:ring-blue-500"
-                      />
-                      <span>Offline</span>
-                    </label>
-                    <label className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${!newSession.isLive ? 'bg-blue-100 text-blue-800' : 'bg-gray-100'}`}>
-                      <input
-                        type="radio"
-                        name="sessionType"
-                        checked={!newSession.isLive}
-                        onChange={() => setNewSession({ ...newSession, isLive: false })}
-                        className="focus:ring-blue-500"
-                      />
-                      <span>Online</span>
-                    </label>
-                  </div>
-
-                  {newSession.isLive ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Location*</label>
-                      <input
-                        className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter class location"
-                        value={newSession.location}
-                        onChange={e => setNewSession({ ...newSession, location: e.target.value })}
-                      />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Meeting Link</label>
-                      <input
-                        className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="https://meeting.us/j/..."
-                        value={newSession.zoomLink}
-                        onChange={e => setNewSession({ ...newSession, zoomLink: e.target.value })}
-                      />
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)*</label>
-                      <input
-                        type="number"
-                        min="1"
-                        className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                        value={selectedDuration}
-                        onChange={e => setSelectedDuration(e.target.value)}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Select Date</label>
-                      <DatePicker
-                        selected={selectedDate}
-                        onChange={date => setSelectedDate(date)}
-                        minDate={new Date()}
-                        className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                        placeholderText="Select a date"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Select Time</label>
-                      <input
-                        type="time"
-                        className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                        value={selectedTime}
-                        onChange={e => setSelectedTime(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Number of Recurring Weeks</label>
-                    <select
-                      className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                      value={newSession.recurringWeeks}
-                      onChange={e => setNewSession({ ...newSession, recurringWeeks: parseInt(e.target.value) })}
-                    >
-                      {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
-                        <option key={num} value={num}>{num} week{num !== 1 ? 's' : ''}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <button
-                    onClick={addSlot}
-                    className="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-                  >
-                    Add Recurring Slots
-                  </button>
-
-                  {newSession.classDates.length > 0 && (
-                    <div>
-                      <h3 className="text-lg font-medium mb-2">Added Slots</h3>
-                      <ul className="space-y-2">
-                        {newSession.classDates.map((slot, index) => (
-                          <li key={index} className="flex justify-between items-center bg-gray-50 p-2 rounded">
-                            <span>
-                              {formatDate(slot.date)} - {slot.time} ({slot.duration} min)
-                            </span>
-                            <button
-                              onClick={() => removeSlot(index)}
-                              className="text-red-500 hover:text-red-700"
-                            >
-                              Remove
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center">
+                {!showForm && (
+                  <div className="text-center py-8">
                     <button
-                      onClick={() => setShowForm(false)}
-                      className="text-sm text-gray-500 underline"
+                      onClick={() => setShowForm(true)}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-4 px-8 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
                     >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleCreate}
-                      disabled={loading}
-                      className={`py-2 px-4 rounded text-white ${loading ? 'bg-blue-300' : 'bg-blue-600 hover:bg-blue-700'}`}
-                    >
-                      {loading ? 'Creating...' : 'Create Session'}
+                      <span className="flex items-center justify-center space-x-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                        <span>Schedule New Class</span>
+                      </span>
                     </button>
                   </div>
-                </div>
-              )}
+                )}
+
+                {showForm && (
+                  <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Title*</label>
+                        <input
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          placeholder="Enter session title"
+                          value={newSession.title}
+                          onChange={e => setNewSession({ ...newSession, title: e.target.value })}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Session Type</label>
+                        <div className="flex space-x-3">
+                          <button
+                            onClick={() => setNewSession({ ...newSession, isLive: true })}
+                            className={`flex-1 py-2 px-4 rounded-lg transition-all duration-200 border ${
+                              newSession.isLive 
+                                ? 'bg-green-500 text-white border-green-500 shadow-lg' 
+                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                            }`}
+                          >
+                            Offline
+                          </button>
+                          <button
+                            onClick={() => setNewSession({ ...newSession, isLive: false })}
+                            className={`flex-1 py-2 px-4 rounded-lg transition-all duration-200 border ${
+                              !newSession.isLive 
+                                ? 'bg-blue-500 text-white border-blue-500 shadow-lg' 
+                                : 'bg-gray-100 text-gray-700 border-gray-300 hover:bg-gray-200'
+                            }`}
+                          >
+                            Online
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">Description*</label>
+                      <textarea
+                        className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm resize-none"
+                        placeholder="Describe your training session..."
+                        value={newSession.description}
+                        onChange={e => setNewSession({ ...newSession, description: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+
+                    {newSession.isLive ? (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Location*</label>
+                        <input
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          placeholder="Enter class location"
+                          value={newSession.location}
+                          onChange={e => setNewSession({ ...newSession, location: e.target.value })}
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Meeting Link</label>
+                        <input
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          placeholder="https://meeting.us/j/..."
+                          value={newSession.zoomLink}
+                          onChange={e => setNewSession({ ...newSession, zoomLink: e.target.value })}
+                        />
+                      </div>
+                    )}
+
+                    <div className="grid md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Duration (min)*</label>
+                        <input
+                          type="number"
+                          min="1"
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          value={selectedDuration}
+                          onChange={e => setSelectedDuration(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Date</label>
+                        <DatePicker
+                          selected={selectedDate}
+                          onChange={date => setSelectedDate(date)}
+                          minDate={new Date()}
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          placeholderText="Select date"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
+                        <input
+                          type="time"
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          value={selectedTime}
+                          onChange={e => setSelectedTime(e.target.value)}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Recurring Weeks</label>
+                        <select
+                          className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-white/50 backdrop-blur-sm"
+                          value={newSession.recurringWeeks}
+                          onChange={e => setNewSession({ ...newSession, recurringWeeks: parseInt(e.target.value) })}
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
+                            <option key={num} value={num}>{num} week{num !== 1 ? 's' : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={addSlot}
+                      disabled={!selectedDate || !selectedTime}
+                      className="w-full bg-gradient-to-r from-green-500 to-emerald-600 text-white py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    >
+                      Add Recurring Slots
+                    </button>
+
+                    {newSession.classDates.length > 0 && (
+                      <div className="border border-gray-200 rounded-xl p-4 bg-white/50">
+                        <h3 className="text-lg font-semibold text-gray-800 mb-3">Scheduled Slots</h3>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {newSession.classDates.map((slot, index) => (
+                            <div key={index} className="flex justify-between items-center bg-white p-3 rounded-lg border border-gray-200 hover:border-blue-300 transition-all duration-200">
+                              <span className="text-sm font-medium text-gray-700">
+                                {formatDate(slot.date)} - {slot.time} ({slot.duration} min)
+                              </span>
+                              <button
+                                onClick={() => removeSlot(index)}
+                                className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors duration-200"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => setShowForm(false)}
+                        className="text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreate}
+                        disabled={loading || !newSession.title || !newSession.description || newSession.classDates.length === 0}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-3 px-8 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                      >
+                        {loading ? (
+                          <span className="flex items-center space-x-2">
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                            <span>Creating...</span>
+                          </span>
+                        ) : (
+                          'Create Session'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'view' && (
             <div>
-              <h2 className="text-2xl font-bold text-blue-800 mb-6">My Training Sessions</h2>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">
+                  My Training Sessions
+                </h2>
+                <p className="text-gray-600">Manage your scheduled training sessions</p>
+              </div>
+              
               {sessions.length === 0 ? (
-                <div className="bg-white rounded-lg shadow-md p-6 text-center text-gray-500">
-                  No sessions created yet
+                <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-12 text-center">
+                  <div className="max-w-md mx-auto">
+                    <div className="w-16 h-16 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                    </div>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">No sessions yet</h3>
+                    <p className="text-gray-500 mb-4">Get started by creating your first training session</p>
+                    <button
+                      onClick={() => setActiveTab('create')}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-6 rounded-lg font-medium hover:shadow-lg transition-all duration-200"
+                    >
+                      Create Session
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="space-y-6">
+                <div className="space-y-4">
                   {sessions.map(session => (
-                    <div key={session._id} className="bg-white rounded-lg shadow-md p-6">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="text-lg font-bold">{session.title}</h3>
-                          <span className={`inline-block px-2 py-1 rounded text-xs font-medium ${
-                            session.isLive ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {session.isLive ? 'Offline' : 'Online'}
-                          </span>
+                    <div key={session._id} className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 overflow-hidden">
+                      <div className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3 mb-2">
+                              <h3 className="text-xl font-bold text-gray-800">{session.title}</h3>
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                                session.isLive 
+                                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+                              }`}>
+                                {session.isLive ? '📍 Offline' : '🌐 Online'}
+                              </span>
+                            </div>
+                            <p className="text-gray-600 leading-relaxed">{session.description}</p>
+                          </div>
+                          <div className="flex space-x-2 ml-4">
+                            <button
+                              onClick={() => handleReschedule(session)}
+                              className="bg-gradient-to-r from-amber-500 to-orange-500 text-white p-2 rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                              title="Reschedule"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleCancel(session._id)}
+                              className="bg-gradient-to-r from-red-500 to-pink-600 text-white p-2 rounded-lg hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95"
+                              title="Cancel"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => handleReschedule(session)}
-                            className="bg-yellow-500 text-white py-1 px-3 rounded text-sm hover:bg-yellow-600"
-                          >
-                            Reschedule
-                          </button>
-                          <button
-                            onClick={() => handleCancel(session._id)}
-                            className="bg-red-500 text-white py-1 px-3 rounded text-sm hover:bg-red-600"
-                          >
-                            Cancel
-                          </button>
+
+                        <div className="grid md:grid-cols-2 gap-6">
+                          <div>
+                            <h4 className="font-semibold text-gray-700 mb-2 flex items-center">
+                              <svg className="w-4 h-4 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                              Scheduled Slots
+                            </h4>
+                            <div className="space-y-2">
+                              {session.classDates.map((slot, i) => (
+                                <div key={i} className="flex items-center text-sm text-gray-600 bg-white/50 p-2 rounded-lg">
+                                  <span className="font-medium">{formatDate(slot.date)}</span>
+                                  <span className="mx-2">•</span>
+                                  <span>{slot.time} ({slot.duration} min)</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div>
+                            <h4 className="font-semibold text-gray-700 mb-2 flex items-center">
+                              <svg className="w-4 h-4 mr-2 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                              </svg>
+                              Enrolled Students ({session.enrolledStudents?.length || 0})
+                            </h4>
+                            {session.enrolledStudents?.length > 0 ? (
+                              <div className="space-y-1">
+                                {session.enrolledStudents.map((student, i) => (
+                                  <div key={i} className="text-sm text-gray-600 bg-white/50 p-2 rounded-lg">
+                                    👤 {student}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 italic">No students enrolled yet</p>
+                            )}
+                          </div>
                         </div>
-                      </div>
 
-                      <p className="mt-2 text-gray-600">{session.description}</p>
-
-                      {session.isLive ? (
-                        <p className="mt-2"><strong>Location:</strong> {session.location}</p>
-                      ) : (
-                        <a 
-                          href={session.zoomLink} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:underline mt-2 inline-block"
-                        >
-                          Join Meeting
-                        </a>
-                      )}
-
-                      <div className="mt-4">
-                        <h4 className="font-medium">Scheduled Slots:</h4>
-                        <ul className="mt-2 space-y-1">
-                          {session.classDates.map((slot, i) => (
-                            <li key={i} className="text-sm">
-                              {formatDate(slot.date)} at {slot.time} ({slot.duration} minutes)
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      <div className="mt-4">
-                        <h4 className="font-medium">Enrolled Students ({session.enrolledStudents?.length || 0}):</h4>
-                        {session.enrolledStudents?.length > 0 ? (
-                          <ul className="mt-2 space-y-1">
-                            {session.enrolledStudents.map((student, i) => (
-                              <li key={i} className="text-sm">
-                                {student}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-sm text-gray-500 mt-1">No students enrolled yet</p>
+                        {!session.isLive && session.zoomLink && (
+                          <div className="mt-4">
+                            <a 
+                              href={session.zoomLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:shadow-lg transition-all duration-200"
+                            >
+                              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              Join Meeting
+                            </a>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -560,63 +655,78 @@ const TeacherDashboard = () => {
         </section>
 
         {/* Right Column: Calendar */}
-        <aside className="w-full md:w-1/3 p-6 bg-blue-100">
-          <h2 className="text-xl font-bold mb-4">Calendar</h2>
-          <div className="bg-white rounded-lg shadow p-4">
-            <Calendar
-              tileClassName={tileClassName}
-              tileContent={tileContent}
-              onClickDay={handleDayClick}
-            />
+        <aside className="lg:w-96">
+          <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6 sticky top-6">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent mb-4">
+              Calendar Overview
+            </h2>
+            <div className="bg-white rounded-xl shadow-inner border border-gray-200 p-4">
+              <Calendar
+                tileClassName={tileClassName}
+                tileContent={tileContent}
+                onClickDay={handleDayClick}
+                className="border-0"
+              />
+            </div>
+            <div className="mt-4 text-sm text-gray-600">
+              <p>Click on highlighted dates to view scheduled sessions</p>
+            </div>
           </div>
         </aside>
       </main>
 
       {/* Reschedule Modal */}
       {showRescheduleCalendar && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-xl font-bold mb-4">Reschedule Session</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Date</label>
-                <DatePicker
-                  selected={selectedDate}
-                  onChange={date => setSelectedDate(date)}
-                  minDate={new Date()}
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                />
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl border border-white/20 max-w-md w-full transform transition-all duration-300 scale-100">
+            <div className="p-6">
+              <h3 className="text-xl font-bold text-gray-800 mb-2">Reschedule Session</h3>
+              <p className="text-gray-600 mb-4">Select new date and time for your session</p>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">Select Date</label>
+                  <DatePicker
+                    selected={selectedDate}
+                    onChange={date => setSelectedDate(date)}
+                    minDate={new Date()}
+                    className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Time</label>
+                    <input
+                      type="time"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      value={selectedTime}
+                      onChange={e => setSelectedTime(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Duration (min)</label>
+                    <input
+                      type="number"
+                      className="w-full p-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                      value={selectedDuration}
+                      onChange={e => setSelectedDuration(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Select Time</label>
-                <input
-                  type="time"
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  value={selectedTime}
-                  onChange={e => setSelectedTime(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
-                <input
-                  type="number"
-                  className="w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500"
-                  value={selectedDuration}
-                  onChange={e => setSelectedDuration(e.target.value)}
-                />
-              </div>
-              <div className="flex justify-end space-x-2">
+              
+              <div className="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
                 <button
                   onClick={() => setShowRescheduleCalendar(false)}
-                  className="bg-gray-300 text-gray-800 py-2 px-4 rounded hover:bg-gray-400"
+                  className="px-6 py-2 text-gray-600 hover:text-gray-800 font-medium transition-colors duration-200"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleNewReschedule}
-                  className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+                  className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white py-2 px-6 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
                 >
-                  Save
+                  Save Changes
                 </button>
               </div>
             </div>

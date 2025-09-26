@@ -1,132 +1,118 @@
 const express = require('express');
-const { keycloak } = require('../keycloak-config');
-const TrainingSession = require('../models/TrainingSession');
 const Exam = require('../models/Exam');
-const { sendEmail } = require('../utils/emailService');
-
+const TrainingSession = require('../models/TrainingSession');
+const { keycloak } = require('../keycloak-config');
 const router = express.Router();
 
-// ─── List Exams (with optional session filter) ─────────────────────────────────
-router.get(
-  '/',
-  keycloak.protect('realm:examiner'),
-  async (req, res) => {
-    try {
-      const filter = {};
-      if (req.query.sessionId) filter.sessionId = req.query.sessionId;
-      const exams = await Exam.find(filter).populate('sessionId', 'title');
-      return res.json(exams);
-    } catch (err) {
-      console.error('GET /exams error', err);
-      return res.status(500).json({ message: err.message });
-    }
+// GET: Get all exams for the logged-in teacher
+router.get('/mine', keycloak.protect(), async (req, res) => {
+  try {
+    const exams = await Exam.find({ createdBy: req.user.email })
+      .populate('sessionId', 'title description isLive')
+      .sort({ date: 1 });
+    res.json(exams);
+  } catch (err) {
+    console.error('Error fetching exams:', err);
+    res.status(500).json({ message: 'Server error' });
   }
-);
+});
 
-// ─── Create Exam ───────────────────────────────────────────────────────────────
-router.post(
-  '/',
-  keycloak.protect('realm:examiner'),
-  async (req, res) => {
-    const { sessionId, date, time, isOnline, onlineLink, location } = req.body;
-    if (!sessionId || !date || !time) {
-      return res.status(400).json({ message: 'Missing required fields' });
+// GET: Get exam by ID
+router.get('/:id', keycloak.protect(), async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id)
+      .populate('sessionId', 'title description classDates isLive');
+    
+    if (!exam) {
+      return res.status(404).json({ message: 'Exam not found' });
     }
-
-    try {
-      const sess = await TrainingSession.findById(sessionId);
-      if (!sess) return res.status(404).json({ message: 'Training session not found' });
-
-      const exam = new Exam({
-        sessionId,
-        date,
-        time,
-        isOnline,
-        onlineLink: isOnline ? onlineLink : undefined,
-        location: !isOnline ? location : undefined,
-        createdBy: req.user.email
-      });
-
-      await exam.save();
-      return res.status(201).json(exam);
-    } catch (err) {
-      console.error('POST /exams error', err);
-      return res.status(500).json({ message: err.message });
-    }
+    
+    res.json(exam);
+  } catch (err) {
+    console.error('Error fetching exam:', err);
+    res.status(500).json({ message: 'Server error' });
   }
-);
+});
 
-// ─── Update Exam ───────────────────────────────────────────────────────────────
-router.put(
-  '/:id',
-  keycloak.protect('realm:examiner'),
-  async (req, res) => {
-    try {
-      const exam = await Exam.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-        runValidators: true
-      });
-      if (!exam) return res.status(404).json({ message: 'Exam not found' });
-      return res.json(exam);
-    } catch (err) {
-      console.error('PUT /exams/:id error', err);
-      return res.status(500).json({ message: err.message });
+// PUT: Update exam details
+router.put('/:id', keycloak.protect(), async (req, res) => {
+  try {
+    const { date, time, location, onlineLink, assignedExaminer } = req.body;
+    
+    const updateData = {};
+    if (date) updateData.date = new Date(date);
+    if (time) updateData.time = time;
+    if (location) updateData.location = location;
+    if (onlineLink) updateData.onlineLink = onlineLink;
+    if (assignedExaminer) updateData.assignedExaminer = assignedExaminer;
+    
+    const updatedExam = await Exam.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    ).populate('sessionId');
+    
+    if (!updatedExam) {
+      return res.status(404).json({ message: 'Exam not found' });
     }
+    
+    res.json(updatedExam);
+  } catch (err) {
+    console.error('Error updating exam:', err);
+    res.status(500).json({ message: 'Server error' });
   }
-);
+});
 
-// ─── Delete Exam and Send Notification ─────────────────────────────────────────
-router.delete(
-  '/:id',
-  keycloak.protect('realm:examiner'),
-  async (req, res) => {
-    try {
-      // First get the exam details before deleting
-      const exam = await Exam.findById(req.params.id).populate('sessionId', 'title');
-      
-      if (!exam) return res.status(404).json({ message: 'Exam not found' });
-
-      // Prepare email content BEFORE deleting
-      const emailContent = {
-        to: 'chillalsaikishor21@gmail.com',
-        subject: 'Exam Cancellation Notification',
-        html: `
-          <h2>Exam Cancelled</h2>
-          <p>The following exam has been cancelled:</p>
-          <ul>
-            <li><strong>Session:</strong> ${exam.sessionId?.title || 'N/A'}</li>
-            <li><strong>Date:</strong> ${new Date(exam.date).toLocaleDateString()}</li>
-            <li><strong>Time:</strong> ${exam.time}</li>
-            <li><strong>Mode:</strong> ${exam.isOnline ? 'Online' : 'Offline'}</li>
-            ${exam.isOnline ? 
-              `<li><strong>Link:</strong> ${exam.onlineLink || 'N/A'}</li>` : 
-              `<li><strong>Location:</strong> ${exam.location || 'N/A'}</li>`}
-          </ul>
-          <p>Cancelled by: ${req.user.email}</p>
-        `
-      };
-
-      // Delete the exam
-      await Exam.findByIdAndDelete(req.params.id);
-
-      // Send email with proper error handling
-      try {
-        await sendEmail(emailContent);
-        console.log('Cancellation email sent successfully');
-      } catch (emailError) {
-        console.error('Failed to send cancellation email:', emailError);
-        // Don't fail the request if email fails
-      }
-
-      return res.json({ 
-        message: 'Exam cancelled',
-        emailSent: true // Indicate email was attempted
-      });
-    } catch (err) {
-      console.error('DELETE /exams/:id error', err);
-      return res.status(500).json({ message: err.message });
+// POST: Manually schedule exam for a session
+router.post('/session/:sessionId/schedule', keycloak.protect(), async (req, res) => {
+  try {
+    const session = await TrainingSession.findById(req.params.sessionId);
+    
+    if (!session) {
+      return res.status(404).json({ message: 'Training session not found' });
     }
+    
+    if (session.createdBy !== req.user.email) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    
+    if (session.scheduledExam) {
+      return res.status(400).json({ message: 'Exam already scheduled for this session' });
+    }
+    
+    const exam = await session.scheduleExam();
+    res.status(201).json(exam);
+  } catch (err) {
+    console.error('Error scheduling exam:', err);
+    res.status(500).json({ message: 'Server error' });
   }
-);
+});
+
+// DELETE: Cancel exam
+router.delete('/:id', keycloak.protect(), async (req, res) => {
+  try {
+    const exam = await Exam.findById(req.params.id);
+    
+    if (!exam) {
+      return res.status(404).json({ message: 'Exam not found' });
+    }
+    
+    if (exam.createdBy !== req.user.email) {
+      return res.status(403).json({ message: 'Not authorized' });
+    }
+    
+    // Remove exam reference from training session
+    await TrainingSession.updateOne(
+      { scheduledExam: req.params.id },
+      { $unset: { scheduledExam: 1 } }
+    );
+    
+    await Exam.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Exam cancelled successfully' });
+  } catch (err) {
+    console.error('Error deleting exam:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
 module.exports = router;

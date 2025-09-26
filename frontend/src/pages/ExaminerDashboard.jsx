@@ -7,7 +7,9 @@ import {
   FaSignOutAlt, 
   FaBars,
   FaPlus,
-  FaTrash
+  FaTrash,
+  FaTimes,
+  FaEdit
 } from 'react-icons/fa';
 import { FiClock } from 'react-icons/fi';
 import CalendarComponent from '../components/CalendarComponent';
@@ -19,11 +21,11 @@ const ExaminerDashboard = () => {
     availableFrom: '',
     availableTo: ''
   });
+  const [editingAvailability, setEditingAvailability] = useState(null);
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [highlightDates, setHighlightDates] = useState({});
   const [showCalendar, setShowCalendar] = useState(false);
-  const [popupData, setPopupData] = useState(null);
   const [activeSidebarTab, setActiveSidebarTab] = useState('view');
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -51,15 +53,22 @@ const ExaminerDashboard = () => {
       // Prepare highlight dates for calendar
       const newHighlightDates = {};
       data.forEach(availability => {
-        const fromDate = new Date(availability.availableFrom).toLocaleDateString('en-CA');
-        const toDate = new Date(availability.availableTo).toLocaleDateString('en-CA');
+        const start = new Date(availability.availableFrom);
+        const end = new Date(availability.availableTo);
         
-        if (!newHighlightDates[fromDate]) newHighlightDates[fromDate] = [];
-        newHighlightDates[fromDate].push(availability);
-        
-        if (fromDate !== toDate) {
-          if (!newHighlightDates[toDate]) newHighlightDates[toDate] = [];
-          newHighlightDates[toDate].push(availability);
+        // Mark all dates in the range
+        const current = new Date(start);
+        while (current <= end) {
+          const dateStr = current.toLocaleDateString('en-CA');
+          if (!newHighlightDates[dateStr]) newHighlightDates[dateStr] = [];
+          if (!newHighlightDates[dateStr].some(a => a._id === availability._id)) {
+            newHighlightDates[dateStr].push({
+              ...availability,
+              isStart: dateStr === start.toLocaleDateString('en-CA'),
+              isEnd: dateStr === end.toLocaleDateString('en-CA')
+            });
+          }
+          current.setDate(current.getDate() + 1);
         }
       });
       setHighlightDates(newHighlightDates);
@@ -91,9 +100,34 @@ const ExaminerDashboard = () => {
       if (!res.ok) throw new Error(await res.text());
       await fetchAvailabilities();
       setNewAvailability({ availableFrom: '', availableTo: '' });
-      setShowAddForm(false); // Close the form after successful submission
+      setShowAddForm(false);
     } catch (err) {
       console.error('Error adding availability:', err);
+      alert('Error adding availability: ' + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateAvailability = async (availabilityId, updatedData) => {
+    try {
+      setLoading(true);
+      await keycloak.updateToken(5);
+      const res = await fetch(`http://localhost:5000/api/availability/${availabilityId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${keycloak.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedData)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      await fetchAvailabilities();
+      setEditingAvailability(null);
+      setShowAddForm(false);
+    } catch (err) {
+      console.error('Error updating availability:', err);
+      alert('Error updating availability: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -116,10 +150,103 @@ const ExaminerDashboard = () => {
       await fetchAvailabilities();
     } catch (err) {
       console.error('Error deleting availability:', err);
+      alert('Error deleting availability: ' + err.message);
     } finally {
       setLoading(false);
     }
   };
+
+ const handleCustomizeDay = async (availabilityId, targetDate, fromTime, toTime) => {
+  if (!window.confirm('Update the time for this specific day?')) return;
+  
+  try {
+    setLoading(true);
+    await keycloak.updateToken(5);
+    
+    const requestBody = {
+      targetDate: targetDate,
+      newFromTime: fromTime,
+      newToTime: toTime
+    };
+    
+    console.log('Sending customize request:', requestBody);
+    
+    const res = await fetch(`http://localhost:5000/api/availability/${availabilityId}/day`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    const responseText = await res.text();
+    console.log('Response:', responseText);
+    
+    if (!res.ok) {
+      throw new Error(responseText || 'Failed to update day');
+    }
+    
+    const result = JSON.parse(responseText);
+    await fetchAvailabilities();
+    alert(result.message || 'Day availability updated successfully!');
+  } catch (err) {
+    console.error('Error updating day availability:', err);
+    
+    try {
+      const errorData = JSON.parse(err.message);
+      alert('Error updating day: ' + (errorData.message || err.message));
+    } catch (parseError) {
+      alert('Error updating day: ' + err.message);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const handleDeleteDay = async (availabilityId, targetDate) => {
+  if (!window.confirm('Remove this specific day from your availability?')) return;
+  
+  try {
+    setLoading(true);
+    await keycloak.updateToken(5);
+    
+    const requestBody = { targetDate: targetDate };
+    console.log('Sending delete day request:', requestBody);
+    
+    const res = await fetch(`http://localhost:5000/api/availability/${availabilityId}/day`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${keycloak.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    const responseText = await res.text();
+    console.log('Response:', responseText);
+    
+    if (!res.ok) {
+      throw new Error(responseText || 'Failed to delete day');
+    }
+    
+    const result = JSON.parse(responseText);
+    await fetchAvailabilities();
+    alert(result.message || 'Day removed from availability successfully!');
+  } catch (err) {
+    console.error('Error deleting day from availability:', err);
+    
+    try {
+      const errorData = JSON.parse(err.message);
+      alert('Error removing day: ' + (errorData.message || err.message));
+    } catch (parseError) {
+      alert('Error removing day: ' + err.message);
+    }
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleLogout = () => {
     keycloak.logout({ redirectUri: window.location.origin });
@@ -136,183 +263,255 @@ const ExaminerDashboard = () => {
     return new Date(dateString).toLocaleDateString(undefined, options);
   };
 
-  const handleCalendarClick = (date) => {
-    const key = date.toLocaleDateString('en-CA');
-    if (highlightDates[key]) {
-      setPopupData({
-        date: key,
-        availabilities: highlightDates[key],
-      });
-    }
-  };
-
-  const closePopup = () => {
-    setPopupData(null);
+  const handleCustomizeAvailability = (availability) => {
+    setEditingAvailability(availability);
+    setActiveSidebarTab('add');
+    setShowAddForm(true);
   };
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-white font-sans">
+    <div className="min-h-screen flex flex-col md:flex-row bg-gray-50 font-sans">
       {/* Hamburger Menu for Sidebar */}
       <button
-        className="lg:hidden fixed top-4 left-4 z-50 bg-blue-500 text-white p-2 rounded-full shadow-lg"
+        className="lg:hidden fixed top-4 left-4 z-50 bg-blue-500 text-white p-3 rounded-xl shadow-lg hover:bg-blue-600 transition-colors"
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
-        <FaBars size={24} />
+        <FaBars size={20} />
       </button>
 
       {/* Sidebar */}
       <div
-        className={`fixed top-0 left-0 h-full bg-gradient-to-b from-blue-100 via-blue-50 to-white shadow-2xl border-r border-blue-300 flex flex-col items-center py-10 px-6 w-[260px] z-40 transition-transform transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
+        className={`fixed top-0 left-0 h-full bg-gradient-to-br from-blue-600 via-blue-500 to-blue-700 shadow-2xl flex flex-col items-center py-8 px-6 w-80 z-40 transition-transform duration-300 transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}
       >
-        <img src={profile.profileImg} alt="Profile" className="w-24 h-24 rounded-full border-4 border-blue-300 shadow-lg mb-4" />
-        <div className="font-extrabold text-2xl text-blue-800 mb-1 text-center font-serif tracking-wide">{profile.name}</div>
-        <div className="text-blue-600 text-sm mb-10 text-center font-medium">{profile.email}</div>
+        <img src={profile.profileImg} alt="Profile" className="w-28 h-28 rounded-full border-4 border-white/20 shadow-2xl mb-6" />
+        <div className="font-bold text-2xl text-white mb-2 text-center font-sans tracking-wide">{profile.name}</div>
+        <div className="text-blue-100 text-sm mb-8 text-center font-medium">{profile.email}</div>
         
-        <nav className="flex flex-col gap-4 w-full mb-10">
+        <nav className="flex flex-col gap-3 w-full mb-8">
           <button 
             onClick={() => {
               setActiveSidebarTab('view');
               setShowAddForm(false);
+              setEditingAvailability(null);
             }}
-            className={`w-full text-left px-6 py-3 rounded-2xl font-bold text-lg transition tracking-wide flex items-center gap-3 ${activeSidebarTab === 'view' ? 'bg-white text-blue-800 shadow-lg' : 'text-blue-600 hover:bg-blue-100 hover:shadow-md'}`}
+            className={`w-full text-left px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center gap-3 ${
+              activeSidebarTab === 'view' 
+                ? 'bg-white text-blue-700 shadow-lg transform scale-105' 
+                : 'text-white/90 hover:bg-white/10 hover:shadow-md'
+            }`}
           >
-            <FaCalendarAlt /> View Availabilities
+            <FaCalendarAlt className="text-lg" /> View Availabilities
           </button>
           <button 
             onClick={() => {
               setActiveSidebarTab('add');
               setShowAddForm(true);
+              setEditingAvailability(null);
             }}
-            className={`w-full text-left px-6 py-3 rounded-2xl font-bold text-lg transition tracking-wide flex items-center gap-3 ${activeSidebarTab === 'add' ? 'bg-white text-blue-800 shadow-lg' : 'text-blue-600 hover:bg-blue-100 hover:shadow-md'}`}
+            className={`w-full text-left px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-200 flex items-center gap-3 ${
+              activeSidebarTab === 'add' 
+                ? 'bg-white text-blue-700 shadow-lg transform scale-105' 
+                : 'text-white/90 hover:bg-white/10 hover:shadow-md'
+            }`}
           >
-            <FaPlus /> Add Availability
+            <FaPlus className="text-lg" /> {editingAvailability ? 'Edit Availability' : 'Add Availability'}
           </button>
         </nav>
         
-        <button 
-          onClick={handleLogout} 
-          className="mt-auto mb-8 w-11/12 bg-white text-blue-800 font-bold px-6 py-3 rounded-2xl shadow-lg hover:bg-blue-100 hover:shadow-xl transition tracking-wide flex items-center justify-center gap-3"
-        >
-          <FaSignOutAlt /> Logout
-        </button>
+        <div className="mt-auto w-full">
+          <div className="bg-white/10 rounded-xl p-4 mb-6 text-center">
+            <div className="text-white/80 text-sm mb-1">Total Availabilities</div>
+            <div className="text-white text-2xl font-bold">{profile.availabilityCount}</div>
+          </div>
+          
+          <button 
+            onClick={handleLogout} 
+            className="w-full bg-white/20 text-white font-semibold px-6 py-4 rounded-xl shadow-lg hover:bg-white/30 hover:shadow-xl transition-all duration-200 flex items-center justify-center gap-3"
+          >
+            <FaSignOutAlt /> Logout
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 px-4 sm:px-6 md:px-8 overflow-y-auto md:ml-[260px]">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center py-6 gap-4">
-          <h1 className="text-2xl font-extrabold text-blue-900 tracking-tight font-serif">
-            Examiner Dashboard
-          </h1>
+      <div className="flex-1 px-4 sm:px-6 md:px-8 overflow-y-auto md:ml-80">
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center py-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight font-sans">
+              Examiner Dashboard
+            </h1>
+            <p className="text-gray-600 mt-2">Manage your availability schedule</p>
+          </div>
           
           <button 
             onClick={() => setShowCalendar(!showCalendar)}
-            className="lg:hidden bg-blue-500 text-white px-4 py-2 rounded-lg shadow hover:bg-blue-600 transition"
+            className="lg:hidden bg-blue-500 text-white px-6 py-3 rounded-xl shadow hover:bg-blue-600 transition-all duration-200 font-medium"
           >
             {showCalendar ? 'Hide Calendar' : 'Show Calendar'}
           </button>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-8">
-          <div className="lg:col-span-2 space-y-6">
-            {/* Conditional rendering based on active sidebar tab */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-8">
+          <div className="lg:col-span-2 space-y-8">
             {activeSidebarTab === 'add' && showAddForm && (
-              <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-blue-800 mb-4 flex items-center gap-2">
-                  <FaPlus className="text-blue-600" /> Add Availability
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FaPlus className="text-blue-600 text-lg" />
+                  </div>
+                  {editingAvailability ? 'Edit Availability' : 'Add New Availability'}
                 </h2>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="form-group">
-                    <label className="block text-gray-700 font-medium mb-2">From</label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                  <div className="space-y-2">
+                    <label className="block text-gray-700 font-semibold mb-3">Start Date & Time</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiClock className="text-gray-400" />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FiClock className="text-gray-400 text-lg" />
                       </div>
                       <input
                         type="datetime-local"
-                        value={newAvailability.availableFrom}
-                        onChange={(e) => setNewAvailability({ ...newAvailability, availableFrom: e.target.value })}
-                        className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        value={editingAvailability ? 
+                          new Date(editingAvailability.availableFrom).toISOString().slice(0, 16) : 
+                          newAvailability.availableFrom
+                        }
+                        onChange={(e) => {
+                          if (editingAvailability) {
+                            setEditingAvailability({
+                              ...editingAvailability,
+                              availableFrom: e.target.value
+                            });
+                          } else {
+                            setNewAvailability({ ...newAvailability, availableFrom: e.target.value });
+                          }
+                        }}
+                        className="pl-12 w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       />
                     </div>
                   </div>
 
-                  <div className="form-group">
-                    <label className="block text-gray-700 font-medium mb-2">To</label>
+                  <div className="space-y-2">
+                    <label className="block text-gray-700 font-semibold mb-3">End Date & Time</label>
                     <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <FiClock className="text-gray-400" />
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <FiClock className="text-gray-400 text-lg" />
                       </div>
                       <input
                         type="datetime-local"
-                        value={newAvailability.availableTo}
-                        onChange={(e) => setNewAvailability({ ...newAvailability, availableTo: e.target.value })}
-                        className="pl-10 w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        value={editingAvailability ? 
+                          new Date(editingAvailability.availableTo).toISOString().slice(0, 16) : 
+                          newAvailability.availableTo
+                        }
+                        onChange={(e) => {
+                          if (editingAvailability) {
+                            setEditingAvailability({
+                              ...editingAvailability,
+                              availableTo: e.target.value
+                            });
+                          } else {
+                            setNewAvailability({ ...newAvailability, availableTo: e.target.value });
+                          }
+                        }}
+                        className="pl-12 w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="mt-6 flex justify-end gap-4">
+                <div className="flex justify-end gap-4">
                   <button
                     onClick={() => {
                       setShowAddForm(false);
                       setActiveSidebarTab('view');
+                      setEditingAvailability(null);
                     }}
-                    className="px-6 py-3 rounded-lg font-bold text-blue-800 bg-white border border-blue-300 hover:bg-blue-50 transition"
+                    className="px-8 py-3 rounded-xl font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-all duration-200"
                   >
                     Cancel
                   </button>
                   <button
-                    onClick={handleAddAvailability}
-                    disabled={loading || !newAvailability.availableFrom || !newAvailability.availableTo}
-                    className={`px-6 py-3 rounded-lg font-bold text-white ${loading || !newAvailability.availableFrom || !newAvailability.availableTo ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} transition`}
+                    onClick={() => {
+                      if (editingAvailability) {
+                        handleUpdateAvailability(editingAvailability._id, {
+                          availableFrom: editingAvailability.availableFrom,
+                          availableTo: editingAvailability.availableTo
+                        });
+                      } else {
+                        handleAddAvailability();
+                      }
+                    }}
+                    disabled={loading || 
+                      (editingAvailability ? 
+                        (!editingAvailability.availableFrom || !editingAvailability.availableTo) :
+                        (!newAvailability.availableFrom || !newAvailability.availableTo)
+                      )
+                    }
+                    className={`px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200 ${
+                      loading || 
+                      (editingAvailability ? 
+                        (!editingAvailability.availableFrom || !editingAvailability.availableTo) :
+                        (!newAvailability.availableFrom || !newAvailability.availableTo)
+                      )
+                        ? 'bg-gray-400 cursor-not-allowed' 
+                        : 'bg-blue-500 hover:bg-blue-600 shadow-lg hover:shadow-xl'
+                    }`}
                   >
-                    {loading ? 'Saving...' : 'Add Availability'}
+                    {loading ? (editingAvailability ? 'Updating...' : 'Adding...') : 
+                     (editingAvailability ? 'Update Availability' : 'Add Availability')}
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Availability List Section - Always visible when in view mode */}
             {activeSidebarTab === 'view' && (
-              <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-                <h2 className="text-xl font-bold text-blue-800 mb-4 flex items-center gap-2">
-                  <FaCalendarAlt className="text-blue-600" /> Your Availabilities
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <FaCalendarAlt className="text-blue-600 text-lg" />
+                  </div>
+                  Your Availabilities
                 </h2>
                 
                 {availabilities.length === 0 ? (
-                  <div className="text-center py-8 bg-blue-50 rounded-lg">
-                    <FaCalendarAlt className="mx-auto text-4xl text-blue-400 mb-4" />
-                    <p className="text-lg text-blue-700">No availabilities added yet</p>
+                  <div className="text-center py-12 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl">
+                    <FaCalendarAlt className="mx-auto text-5xl text-blue-400 mb-4" />
+                    <p className="text-lg text-gray-700 mb-2">No availabilities added yet</p>
+                    <p className="text-gray-500 mb-6">Start by adding your first availability slot</p>
                     <button
                       onClick={() => {
                         setActiveSidebarTab('add');
                         setShowAddForm(true);
                       }}
-                      className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
+                      className="bg-blue-500 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                     >
-                      Add Availability
+                      Add Your First Availability
                     </button>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {availabilities.map((availability) => (
-                      <div key={availability._id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div key={availability._id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl shadow-sm border border-blue-100 p-6 hover:shadow-md transition-all duration-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div>
-                            <p className="text-sm text-gray-500">From</p>
-                            <p className="font-medium text-gray-800">{formatDateTime(availability.availableFrom)}</p>
+                            <p className="text-sm text-gray-500 font-medium mb-2">START TIME</p>
+                            <p className="font-semibold text-gray-800 text-lg">{formatDateTime(availability.availableFrom)}</p>
                           </div>
                           <div>
-                            <p className="text-sm text-gray-500">To</p>
-                            <p className="font-medium text-gray-800">{formatDateTime(availability.availableTo)}</p>
+                            <p className="text-sm text-gray-500 font-medium mb-2">END TIME</p>
+                            <p className="font-semibold text-gray-800 text-lg">{formatDateTime(availability.availableTo)}</p>
                           </div>
                         </div>
-                        <div className="mt-4 pt-4 border-t border-gray-200 flex justify-end">
+                        <div className="mt-6 pt-4 border-t border-blue-200/50 flex justify-end gap-3">
+                          <button
+                            onClick={() => handleCustomizeAvailability(availability)}
+                            className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow hover:shadow-lg"
+                            disabled={loading}
+                          >
+                            <FaEdit /> Edit
+                          </button>
                           <button
                             onClick={() => handleDeleteAvailability(availability._id)}
-                            className="text-sm bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded-lg transition flex items-center gap-2"
+                            className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-all duration-200 flex items-center gap-2 font-medium shadow hover:shadow-lg"
                             disabled={loading}
                           >
                             <FaTrash /> Remove
@@ -328,11 +527,12 @@ const ExaminerDashboard = () => {
 
           {/* Calendar Section - Desktop */}
           <div className="hidden lg:block">
-            <div className="bg-blue-50 rounded-xl shadow-md border border-blue-100 p-4 sticky top-4">
-              <h2 className="text-lg font-bold text-blue-800 mb-4">Availability Calendar</h2>
+            <div className="sticky top-8">
               <CalendarComponent
                 highlightDates={highlightDates}
-                onDateClick={handleCalendarClick}
+                onDateClick={(date) => console.log('Date clicked:', date)}
+                onCustomize={handleCustomizeDay}
+                onDeleteDay={handleDeleteDay}
               />
             </div>
           </div>
@@ -340,46 +540,29 @@ const ExaminerDashboard = () => {
       </div>
 
       {/* Calendar Section - Mobile */}
-      <div
-        className={`fixed top-0 left-0 w-full h-screen bg-white z-50 transition-transform transform ${showCalendar ? 'translate-y-0' : '-translate-y-full'} lg:hidden`}
-      >
-        {showCalendar && (
-          <button
-            className="absolute top-4 right-4 bg-red-500 text-white p-2 rounded-full shadow-lg"
-            onClick={() => setShowCalendar(false)}
-          >
-            Close
-          </button>
-        )}
-        <div className="p-4">
-          <h2 className="text-xl font-bold text-blue-800 mb-4">Availability Calendar</h2>
-          <CalendarComponent
-            highlightDates={highlightDates}
-            onDateClick={handleCalendarClick}
-          />
-        </div>
-      </div>
-
-      {/* Popup Component */}
-      {popupData && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-6 w-11/12 max-w-md">
-            <h2 className="text-xl font-bold text-blue-800 mb-4">Availability on {popupData.date}</h2>
-            <ul className="space-y-2">
-              {popupData.availabilities.map((availability, index) => (
-                <li key={index} className="p-3 bg-blue-50 rounded-lg shadow-md">
-                  <p className="text-blue-900 font-semibold">
-                    {formatDateTime(availability.availableFrom)} - {formatDateTime(availability.availableTo)}
-                  </p>
-                </li>
-              ))}
-            </ul>
-            <button
-              className="mt-4 w-full bg-red-500 text-white py-2 rounded-lg hover:bg-red-600"
-              onClick={closePopup}
-            >
-              Close
-            </button>
+      {showCalendar && (
+        <div className="lg:hidden fixed inset-0 bg-white z-50">
+          <div className="p-6 h-full flex flex-col">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Availability Calendar</h2>
+              <button
+                onClick={() => setShowCalendar(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+              >
+                <FaTimes className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+            <div className="flex-1">
+              <CalendarComponent
+                highlightDates={highlightDates}
+                onDateClick={(date) => {
+                  console.log('Date clicked:', date);
+                  setShowCalendar(false);
+                }}
+                onCustomize={handleCustomizeDay}
+                onDeleteDay={handleDeleteDay}
+              />
+            </div>
           </div>
         </div>
       )}

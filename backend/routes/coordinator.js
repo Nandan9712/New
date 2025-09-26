@@ -556,4 +556,4 @@ router.delete(
   }
 );
 
-module.exports = { router, autoScheduleExam };
+module.exports = router ;
