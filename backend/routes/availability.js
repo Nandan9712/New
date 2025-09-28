@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Availability = require('../models/Availability');
+const Exam = require('../models/Exam');
 
 const requireAuth = async (req, res, next) => {
   try {
@@ -11,7 +12,20 @@ const requireAuth = async (req, res, next) => {
     const token = req.headers.authorization.split(' ')[1];
     const decoded = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
     
-    req.user = { id: decoded.sub };
+    // Extract user information from Keycloak token
+    req.user = { 
+      id: decoded.sub, // User ID
+      // Use preferred_username as fallback for name and email
+      email: decoded.email || decoded.preferred_username || `${decoded.sub}@university.edu`,
+      name: decoded.name || decoded.preferred_username || decoded.sub
+    };
+    
+    console.log('User info from token:', {
+      id: req.user.id,
+      email: req.user.email,
+      name: req.user.name
+    });
+    
     next();
   } catch (err) {
     console.error('Authorization error:', err);
@@ -19,10 +33,11 @@ const requireAuth = async (req, res, next) => {
   }
 };
 
-// Create Availability
+// Create availability
 router.post('/', requireAuth, async (req, res) => {
   try {
-    const { availableFrom, availableTo } = req.body;
+    const { availableFrom, availableTo, maxExamsPerDay, priority } = req.body;
+    
     if (!availableFrom || !availableTo) {
       return res.status(400).json({ message: 'Both availableFrom and availableTo are required' });
     }
@@ -52,24 +67,53 @@ router.post('/', requireAuth, async (req, res) => {
       });
     }
 
+    // Create availability with user info from Keycloak token
     const availability = new Availability({
       examinerId: req.user.id,
+      examinerName: req.user.name,
+      examinerEmail: req.user.email,
       availableFrom: newFrom,
-      availableTo: newTo
+      availableTo: newTo,
+      maxExamsPerDay: maxExamsPerDay || 3,
+      priority: priority || 1
     });
 
     await availability.save();
+    
+    console.log('Availability created successfully:', {
+      id: availability._id,
+      examinerName: availability.examinerName,
+      examinerEmail: availability.examinerEmail,
+      from: availability.availableFrom,
+      to: availability.availableTo
+    });
+    
     res.status(201).json(availability);
   } catch (err) {
     console.error('Error creating availability:', err);
+    
+    // Handle validation errors specifically
+    if (err.name === 'ValidationError') {
+      const errors = Object.values(err.errors).map(error => error.message);
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: errors 
+      });
+    }
+    
     res.status(500).json({ message: 'Server error' });
   }
 });
 
-// Get my Availabilities
+// Get my availabilities
 router.get('/mine', requireAuth, async (req, res) => {
   try {
+    console.log('Fetching availabilities for user:', req.user.id, req.user.name);
+    
     const availabilities = await Availability.find({ examinerId: req.user.id }).sort({ availableFrom: 1 });
+    
+    console.log(`Found ${availabilities.length} availabilities for user ${req.user.name}`);
+    
     res.json(availabilities);
   } catch (err) {
     console.error('Error fetching availabilities:', err);
@@ -77,7 +121,76 @@ router.get('/mine', requireAuth, async (req, res) => {
   }
 });
 
-// Update Availability
+// Get all availabilities (for admin/debugging)
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const availabilities = await Availability.find().sort({ availableFrom: 1 });
+    res.json(availabilities);
+  } catch (err) {
+    console.error('Error fetching all availabilities:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get available examiners for a specific time slot
+router.get('/available-examiners', requireAuth, async (req, res) => {
+  try {
+    const { date, time, duration } = req.query;
+    
+    if (!date || !time || !duration) {
+      return res.status(400).json({ message: 'Date, time, and duration are required' });
+    }
+
+    const [hours, minutes] = time.split(':').map(Number);
+    const slotStart = new Date(date);
+    slotStart.setHours(hours, minutes, 0, 0);
+    const slotEnd = new Date(slotStart.getTime() + parseInt(duration) * 60000);
+
+    // Find available examiners
+    const availableExaminers = await Availability.find({
+      availableFrom: { $lte: slotStart },
+      availableTo: { $gte: slotEnd }
+    });
+
+    // Get workload for each examiner
+    const examinersWithWorkload = await Promise.all(
+      availableExaminers.map(async (availability) => {
+        const startOfDay = new Date(slotStart);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(slotStart);
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const examCount = await Exam.countDocuments({
+          assignedExaminerId: availability.examinerId,
+          date: { $gte: startOfDay, $lte: endOfDay },
+          status: 'scheduled'
+        });
+
+        return {
+          examinerId: availability.examinerId,
+          examinerName: availability.examinerName,
+          examinerEmail: availability.examinerEmail,
+          currentExams: examCount,
+          maxExams: availability.maxExamsPerDay,
+          priority: availability.priority,
+          available: examCount < availability.maxExamsPerDay
+        };
+      })
+    );
+
+    res.json({
+      slotStart: slotStart.toISOString(),
+      slotEnd: slotEnd.toISOString(),
+      availableExaminers: examinersWithWorkload.filter(e => e.available),
+      allExaminers: examinersWithWorkload
+    });
+  } catch (err) {
+    console.error('Error fetching available examiners:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update availability
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     const { availableFrom, availableTo } = req.body;
@@ -207,6 +320,8 @@ router.put('/:id/day', requireAuth, async (req, res) => {
     if (originalFrom < dayBefore) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
+        examinerName: req.user.name,
+        examinerEmail: req.user.email,
         availableFrom: originalFrom,
         availableTo: dayBefore
       });
@@ -215,6 +330,8 @@ router.put('/:id/day', requireAuth, async (req, res) => {
     // The modified day
     availabilitiesToCreate.push({
       examinerId: req.user.id,
+      examinerName: req.user.name,
+      examinerEmail: req.user.email,
       availableFrom: newFrom,
       availableTo: newTo
     });
@@ -227,6 +344,8 @@ router.put('/:id/day', requireAuth, async (req, res) => {
     if (dayAfter < originalTo) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
+        examinerName: req.user.name,
+        examinerEmail: req.user.email,
         availableFrom: dayAfter,
         availableTo: originalTo
       });
@@ -329,6 +448,8 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     if (originalFrom <= dayBefore) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
+        examinerName: req.user.name,
+        examinerEmail: req.user.email,
         availableFrom: originalFrom,
         availableTo: dayBefore
       });
@@ -342,6 +463,8 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     if (dayAfter <= originalTo) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
+        examinerName: req.user.name,
+        examinerEmail: req.user.email,
         availableFrom: dayAfter,
         availableTo: originalTo
       });

@@ -11,6 +11,7 @@ const studentRoutes = require('./routes/student');
 const examRoutes = require('./routes/exams');
 const availabilityRoutes = require('./routes/availability');
 const coordinatorRoutes = require('./routes/coordinator');
+
  // Load .env
 
 
@@ -65,6 +66,7 @@ app.use('/api/exams', examRoutes);
 app.use('/api/availability', availabilityRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
 app.use('/email', require('./routes/emailTest'));
+
 // Start
 app.listen(5000, () => {
   console.log('🚀 Server running on http://localhost:5000');
