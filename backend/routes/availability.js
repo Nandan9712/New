@@ -247,6 +247,8 @@ router.put('/:id', requireAuth, async (req, res) => {
 });
 
 // Update specific day within availability range
+// Update specific day within availability range - FIXED VERSION
+// Update specific day within availability range - FIXED TIMEZONE VERSION
 router.put('/:id/day', requireAuth, async (req, res) => {
   try {
     const { targetDate, newFromTime, newToTime } = req.body;
@@ -267,32 +269,82 @@ router.put('/:id/day', requireAuth, async (req, res) => {
       return res.status(404).json({ message: 'Availability not found or not yours' });
     }
 
-    const targetDay = new Date(targetDate);
-    const originalFrom = new Date(originalAvailability.availableFrom);
-    const originalTo = new Date(originalAvailability.availableTo);
+    // Parse target date in local timezone (not UTC)
+    const targetDay = new Date(targetDate + 'T00:00:00'); // Use local time
+    const rangeStart = new Date(originalAvailability.availableFrom);
+    const rangeEnd = new Date(originalAvailability.availableTo);
+
+    console.log('Original availability range:', {
+      from: rangeStart.toISOString(),
+      to: rangeEnd.toISOString(),
+      fromLocal: rangeStart.toLocaleString('en-IN'), // Indian timezone
+      toLocal: rangeEnd.toLocaleString('en-IN'),
+      target: targetDay.toISOString(),
+      targetLocal: targetDay.toLocaleString('en-IN')
+    });
+
+    // Normalize dates for comparison - use local date parts only
+    const targetDayStart = new Date(targetDate + 'T00:00:00');
+    const targetDayEnd = new Date(targetDate + 'T23:59:59.999');
+    
+    const rangeStartDate = new Date(rangeStart);
+    rangeStartDate.setHours(0, 0, 0, 0);
+    
+    const rangeEndDate = new Date(rangeEnd);
+    rangeEndDate.setHours(23, 59, 59, 999);
+
+    console.log('Normalized dates for comparison:', {
+      targetDayStart: targetDayStart.toISOString(),
+      targetDayEnd: targetDayEnd.toISOString(),
+      targetDayStartLocal: targetDayStart.toLocaleString('en-IN'),
+      targetDayEndLocal: targetDayEnd.toLocaleString('en-IN'),
+      rangeStartDate: rangeStartDate.toISOString(),
+      rangeEndDate: rangeEndDate.toISOString(),
+      rangeStartLocal: rangeStartDate.toLocaleString('en-IN'),
+      rangeEndLocal: rangeEndDate.toLocaleString('en-IN')
+    });
 
     // Check if target date is within the original range
-    if (targetDay < new Date(originalFrom.setHours(0, 0, 0, 0)) || 
-        targetDay > new Date(originalTo.setHours(23, 59, 59, 999))) {
-      return res.status(400).json({ message: 'Target date is not within the availability range' });
+    // Compare timestamps to avoid timezone issues
+    if (targetDayStart.getTime() < rangeStartDate.getTime() || targetDayStart.getTime() > rangeEndDate.getTime()) {
+      return res.status(400).json({ 
+        message: 'Target date is not within the availability range',
+        details: {
+          targetDate: targetDayStart.toLocaleDateString('en-IN'),
+          targetTimestamp: targetDayStart.getTime(),
+          availabilityStart: rangeStartDate.toLocaleDateString('en-IN'),
+          availabilityStartTimestamp: rangeStartDate.getTime(),
+          availabilityEnd: rangeEndDate.toLocaleDateString('en-IN'),
+          availabilityEndTimestamp: rangeEndDate.getTime()
+        }
+      });
     }
 
-    // Create new time for the target day
-    const newFrom = new Date(targetDate);
-    const [fromHours, fromMinutes] = newFromTime.split(':');
-    newFrom.setHours(parseInt(fromHours), parseInt(fromMinutes), 0, 0);
+    // Create new time for the target day in local timezone
+    const newFrom = new Date(targetDate + 'T' + newFromTime + ':00');
+    const newTo = new Date(targetDate + 'T' + newToTime + ':00');
 
-    const newTo = new Date(targetDate);
-    const [toHours, toMinutes] = newToTime.split(':');
-    newTo.setHours(parseInt(toHours), parseInt(toMinutes), 0, 0);
-
+    // Validate the times
     if (newTo <= newFrom) {
       return res.status(400).json({ message: 'End time must be after start time' });
     }
 
+    console.log('New time range for the day:', {
+      newFrom: newFrom.toISOString(),
+      newTo: newTo.toISOString(),
+      newFromLocal: newFrom.toLocaleString('en-IN'),
+      newToLocal: newTo.toLocaleString('en-IN')
+    });
+
     // If it's a single day availability, just update it
-    const isSingleDay = originalFrom.toDateString() === originalTo.toDateString();
+    const rangeStartLocal = new Date(rangeStart);
+    rangeStartLocal.setHours(0, 0, 0, 0);
+    const rangeEndLocal = new Date(rangeEnd);
+    rangeEndLocal.setHours(23, 59, 59, 999);
+    
+    const isSingleDay = rangeStartLocal.getTime() === rangeEndLocal.getTime();
     if (isSingleDay) {
+      console.log('Updating single day availability');
       const updatedAvailability = await Availability.findOneAndUpdate(
         { _id: req.params.id, examinerId: req.user.id },
         { 
@@ -309,21 +361,26 @@ router.put('/:id/day', requireAuth, async (req, res) => {
       });
     }
 
+    console.log('Splitting multi-day availability');
     // For multi-day range, split into parts
     const availabilitiesToCreate = [];
 
     // Part before the modified day (if any)
-    const dayBefore = new Date(targetDay);
+    const dayBefore = new Date(targetDayStart);
     dayBefore.setDate(dayBefore.getDate() - 1);
     dayBefore.setHours(23, 59, 59, 999);
     
-    if (originalFrom < dayBefore) {
+    if (rangeStart < dayBefore) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
         examinerName: req.user.name,
         examinerEmail: req.user.email,
-        availableFrom: originalFrom,
+        availableFrom: rangeStart,
         availableTo: dayBefore
+      });
+      console.log('Added part before target day:', {
+        from: rangeStart.toLocaleString('en-IN'),
+        to: dayBefore.toLocaleString('en-IN')
       });
     }
 
@@ -335,19 +392,27 @@ router.put('/:id/day', requireAuth, async (req, res) => {
       availableFrom: newFrom,
       availableTo: newTo
     });
+    console.log('Added modified target day:', {
+      from: newFrom.toLocaleString('en-IN'),
+      to: newTo.toLocaleString('en-IN')
+    });
 
     // Part after the modified day (if any)
-    const dayAfter = new Date(targetDay);
+    const dayAfter = new Date(targetDayStart);
     dayAfter.setDate(dayAfter.getDate() + 1);
     dayAfter.setHours(0, 0, 0, 0);
     
-    if (dayAfter < originalTo) {
+    if (dayAfter < rangeEnd) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
         examinerName: req.user.name,
         examinerEmail: req.user.email,
         availableFrom: dayAfter,
-        availableTo: originalTo
+        availableTo: rangeEnd
+      });
+      console.log('Added part after target day:', {
+        from: dayAfter.toLocaleString('en-IN'),
+        to: rangeEnd.toLocaleString('en-IN')
       });
     }
 
@@ -378,26 +443,47 @@ router.put('/:id/day', requireAuth, async (req, res) => {
     // Create the new split availabilities
     const createdAvailabilities = [];
     for (const availabilityData of availabilitiesToCreate) {
-      // Only create if the duration is valid
+      // Only create if the duration is valid (at least 1 minute)
       if (availabilityData.availableFrom < availabilityData.availableTo) {
         const availability = new Availability(availabilityData);
         await availability.save();
         createdAvailabilities.push(availability);
+        console.log('Created new availability:', {
+          from: availabilityData.availableFrom.toLocaleString('en-IN'),
+          to: availabilityData.availableTo.toLocaleString('en-IN')
+        });
+      } else {
+        console.log('Skipping invalid duration availability');
       }
     }
 
     res.json({
       message: 'Day availability updated successfully',
-      originalAvailability: originalAvailability,
-      newAvailabilities: createdAvailabilities
+      originalAvailability: {
+        _id: originalAvailability._id,
+        availableFrom: originalAvailability.availableFrom,
+        availableTo: originalAvailability.availableTo,
+        availableFromLocal: originalAvailability.availableFrom.toLocaleString('en-IN'),
+        availableToLocal: originalAvailability.availableTo.toLocaleString('en-IN')
+      },
+      newAvailabilities: createdAvailabilities.map(avail => ({
+        _id: avail._id,
+        availableFrom: avail.availableFrom,
+        availableTo: avail.availableTo,
+        availableFromLocal: avail.availableFrom.toLocaleString('en-IN'),
+        availableToLocal: avail.availableTo.toLocaleString('en-IN')
+      }))
     });
   } catch (err) {
     console.error('Error updating availability day:', err);
-    res.status(500).json({ message: 'Server error: ' + err.message });
+    res.status(500).json({ 
+      message: 'Server error: ' + err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
   }
 });
-
 // Delete specific day from availability range
+// Delete specific day from availability range - FIXED VERSION
 router.delete('/:id/day', requireAuth, async (req, res) => {
   try {
     const { targetDate } = req.body;
@@ -419,17 +505,33 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     }
 
     const targetDay = new Date(targetDate);
-    const originalFrom = new Date(originalAvailability.availableFrom);
-    const originalTo = new Date(originalAvailability.availableTo);
+    const rangeStart = new Date(originalAvailability.availableFrom);
+    const rangeEnd = new Date(originalAvailability.availableTo);
+
+    // Normalize dates for comparison
+    const targetDayStart = new Date(targetDay);
+    targetDayStart.setHours(0, 0, 0, 0);
+    
+    const rangeStartDate = new Date(rangeStart);
+    rangeStartDate.setHours(0, 0, 0, 0);
+    
+    const rangeEndDate = new Date(rangeEnd);
+    rangeEndDate.setHours(23, 59, 59, 999);
 
     // Check if target date is within the original range
-    if (targetDay < new Date(originalFrom.setHours(0, 0, 0, 0)) || 
-        targetDay > new Date(originalTo.setHours(23, 59, 59, 999))) {
-      return res.status(400).json({ message: 'Target date is not within the availability range' });
+    if (targetDayStart < rangeStartDate || targetDayStart > rangeEndDate) {
+      return res.status(400).json({ 
+        message: 'Target date is not within the availability range',
+        details: {
+          targetDate: targetDayStart.toISOString(),
+          availabilityStart: rangeStartDate.toISOString(),
+          availabilityEnd: rangeEndDate.toISOString()
+        }
+      });
     }
 
     // If it's a single day availability, just delete it
-    const isSingleDay = originalFrom.toDateString() === originalTo.toDateString();
+    const isSingleDay = rangeStartDate.getTime() === rangeEndDate.getTime();
     if (isSingleDay) {
       await Availability.findByIdAndDelete(req.params.id);
       return res.json({
@@ -445,12 +547,12 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     dayBefore.setDate(dayBefore.getDate() - 1);
     dayBefore.setHours(23, 59, 59, 999);
 
-    if (originalFrom <= dayBefore) {
+    if (rangeStart <= dayBefore) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
         examinerName: req.user.name,
         examinerEmail: req.user.email,
-        availableFrom: originalFrom,
+        availableFrom: rangeStart,
         availableTo: dayBefore
       });
     }
@@ -460,13 +562,13 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     dayAfter.setDate(dayAfter.getDate() + 1);
     dayAfter.setHours(0, 0, 0, 0);
 
-    if (dayAfter <= originalTo) {
+    if (dayAfter <= rangeEnd) {
       availabilitiesToCreate.push({
         examinerId: req.user.id,
         examinerName: req.user.name,
         examinerEmail: req.user.email,
         availableFrom: dayAfter,
-        availableTo: originalTo
+        availableTo: rangeEnd
       });
     }
 
@@ -494,7 +596,6 @@ router.delete('/:id/day', requireAuth, async (req, res) => {
     res.status(500).json({ message: 'Server error: ' + err.message });
   }
 });
-
 // Delete entire availability
 router.delete('/:id', requireAuth, async (req, res) => {
   try {

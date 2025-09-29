@@ -1,10 +1,9 @@
-// routes/student.js
 const express = require('express');
 const TrainingSession = require('../models/TrainingSession');
-const Enrollment      = require('../models/Enrollment');
-const { keycloak }    = require('../keycloak-config');
-const Exam          = require('../models/Exam'); 
-const { sendEmail } = require('../utils/emailService');
+const Enrollment = require('../models/Enrollment');
+const Exam = require('../models/Exam');
+const { keycloak } = require('../keycloak-config');
+const { sendExamNotifications, sendEnrollmentNotifications } = require('../utils/emailNotifications');
 const router = express.Router();
 
 // 1️⃣ List all sessions (teacher-created)
@@ -43,22 +42,22 @@ router.post(
 
       // Save enrollment
       await new Enrollment({ sessionId, studentEmail: email }).save();
-      await TrainingSession.findByIdAndUpdate(
+      const updatedSession = await TrainingSession.findByIdAndUpdate(
         sessionId,
-        { $addToSet: { enrolledStudents: email } }
+        { $addToSet: { enrolledStudents: email } },
+        { new: true }
       );
 
-      // Send notification
-      await sendEmail({
-        to: '01fe22bcs217@kletech.ac.in',
-        subject: `New Enrollment: ${session.title}`,
-        html: `
-          <h2>New Enrollment Notification</h2>
-          <p><strong>Student:</strong> ${studentName} (${email})</p>
-          <p><strong>Session:</strong> ${session.title}</p>
-          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-        `
-      });
+      // Send enrollment notifications to both student and teacher
+      await sendEnrollmentNotifications(updatedSession, email, studentName);
+
+      // If session already has an exam scheduled, send exam notification to the new student
+      if (updatedSession.scheduledExam) {
+        const exam = await Exam.findById(updatedSession.scheduledExam);
+        if (exam) {
+          await sendExamNotifications(updatedSession, exam);
+        }
+      }
 
       res.json({ success: true, message: 'Enrolled successfully' });
     } catch (error) {
@@ -70,6 +69,7 @@ router.post(
     }
   }
 );
+
 // 3️⃣ Get sessions this student is enrolled in
 router.get(
   '/sessions/mine',
@@ -87,24 +87,26 @@ router.get(
     }
   }
 );
+
+// 4️⃣ Get exams for sessions the student is enrolled in
 router.get(
-    '/exams/mine',
-    keycloak.protect('realm:student'),
-    async (req, res) => {
-      try {
-        // 1) look up all the sessionIds this student enrolled in
-        const enrolls    = await Enrollment.find({ studentEmail: req.user.email });
-        const sessionIds = enrolls.map(e => e.sessionId);
-  
-        // 2) fetch any exams for those sessions
-        const exams = await Exam.find({ sessionId: { $in: sessionIds } })
-                                .populate('sessionId','title');
-        return res.json(exams);
-      } catch (err) {
-        console.error('GET /exams/mine error', err);
-        return res.status(500).json({ message: err.message });
-      }
+  '/exams/mine',
+  keycloak.protect('realm:student'),
+  async (req, res) => {
+    try {
+      // 1) look up all the sessionIds this student enrolled in
+      const enrolls = await Enrollment.find({ studentEmail: req.user.email });
+      const sessionIds = enrolls.map(e => e.sessionId);
+
+      // 2) fetch any exams for those sessions
+      const exams = await Exam.find({ sessionId: { $in: sessionIds } })
+                              .populate('sessionId','title');
+      return res.json(exams);
+    } catch (err) {
+      console.error('GET /exams/mine error', err);
+      return res.status(500).json({ message: err.message });
     }
-  );
-  
+  }
+);
+
 module.exports = router;

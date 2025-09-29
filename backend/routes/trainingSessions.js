@@ -2,6 +2,7 @@ const express = require('express');
 const TrainingSession = require('../models/TrainingSession');
 const Exam = require('../models/Exam');
 const { keycloak } = require('../keycloak-config');
+const { sendExamNotifications } = require('../utils/emailNotifications');
 const router = express.Router();
 
 function convertDurationToHrMin(durationInMinutes) {
@@ -121,6 +122,11 @@ router.post('/', keycloak.protect(), async (req, res) => {
     let exam;
     try {
       exam = await newSession.scheduleExam();
+      
+      // Send exam notifications to enrolled students if exam was created
+      if (exam) {
+        await sendExamNotifications(newSession, exam);
+      }
     } catch (examError) {
       console.error('Exam scheduling failed:', examError);
     }
@@ -214,7 +220,13 @@ router.put('/:id', keycloak.protect(), async (req, res) => {
     if (classDates) {
       try {
         if (updated.scheduledExam) await Exam.findByIdAndDelete(updated.scheduledExam);
-        await updated.scheduleExam();
+        const newExam = await updated.scheduleExam();
+        
+        // Send notifications if exam was rescheduled
+        if (newExam) {
+          await sendExamNotifications(updated, newExam);
+        }
+        
         const finalSession = await TrainingSession.findById(id).populate('scheduledExam');
         return res.json(finalSession);
       } catch (error) {
@@ -276,6 +288,12 @@ router.post('/:id/create-exam', keycloak.protect(), async (req, res) => {
 
     if (session.scheduledExam) await Exam.findByIdAndDelete(session.scheduledExam);
     const exam = await session.scheduleExam();
+    
+    // Send notifications to enrolled students
+    if (exam) {
+      await sendExamNotifications(session, exam);
+    }
+    
     const updatedSession = await TrainingSession.findById(req.params.id).populate('scheduledExam');
     
     res.status(201).json({ message: 'Exam created', session: updatedSession, exam: exam });
