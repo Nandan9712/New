@@ -15,7 +15,22 @@ import { FiClock, FiMapPin, FiSearch } from 'react-icons/fi';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import '../styles/StudentDashboard.css';
-import { TEMP_PROFILE_IMG, TEMP_SESSION_IMG } from '../constants';
+
+// Session images for better visual appeal
+const SESSION_IMAGES = [
+  'https://images.unsplash.com/photo-1501504905252-473c47e087f8?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80'
+];
+
+// Profile images
+const PROFILE_IMAGES = [
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80'
+];
 
 export default function StudentDashboard() {
   const [allSessions, setAllSessions] = useState([]);
@@ -33,10 +48,25 @@ export default function StudentDashboard() {
   const [profile, setProfile] = useState({
     name: keycloak.tokenParsed?.name || 'Student',
     email: keycloak.tokenParsed?.email || 'student@example.com',
-    profileImg: TEMP_PROFILE_IMG,
+    profileImg: PROFILE_IMAGES[Math.floor(Math.random() * PROFILE_IMAGES.length)],
     enrolledCount: 0,
     examsCount: 0,
   });
+
+  // Get random session image
+  const getSessionImage = () => {
+    return SESSION_IMAGES[Math.floor(Math.random() * SESSION_IMAGES.length)];
+  };
+
+  // Format instructor name to show full name
+  const formatInstructorName = (email) => {
+    if (!email) return 'Not specified';
+    const namePart = email.split('@')[0];
+    return namePart
+      .split('.')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
 
   // Fetch data functions
   useEffect(() => {
@@ -259,7 +289,7 @@ export default function StudentDashboard() {
     >
       <div className="flex-shrink-0">
         <img
-          src={TEMP_SESSION_IMG}
+          src={getSessionImage()}
           alt="Session"
           className="w-32 h-32 object-cover rounded-xl shadow-lg group-hover:shadow-xl transition-shadow duration-300 border border-blue-50"
         />
@@ -291,7 +321,9 @@ export default function StudentDashboard() {
             </div>
             <div>
               <p className="text-xs text-gray-600 font-medium">Instructor</p>
-              <p className="text-sm font-semibold">{session.createdBy || "Not specified"}</p>
+              <p className="text-sm font-semibold truncate" title={formatInstructorName(session.createdBy)}>
+                {formatInstructorName(session.createdBy) || "Not specified"}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3 text-gray-800 bg-blue-50 rounded-lg p-3">
@@ -348,9 +380,11 @@ export default function StudentDashboard() {
         className={`fixed top-0 left-0 h-full bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-2xl border-r border-blue-200 flex flex-col items-center py-8 px-6 w-[280px] z-40 transition-transform transform ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 backdrop-blur-lg`}
       >
         <div className="relative mb-6">
-          <div className="w-28 h-28 rounded-full border-4 border-white shadow-xl ring-4 ring-blue-100 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400 text-xl font-bold select-none">
-            {/* Blank placeholder (no photo) */}
-          </div>
+          <img
+            src={profile.profileImg}
+            alt="Profile"
+            className="w-28 h-28 rounded-full border-4 border-white shadow-xl ring-4 ring-blue-100 object-cover"
+          />
           <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-green-400 rounded-full border-4 border-white shadow-lg"></div>
         </div>
         <div className="font-bold text-2xl text-gray-900 mb-2 text-center tracking-tight">{profile.name}</div>
@@ -497,7 +531,6 @@ export default function StudentDashboard() {
         {activeTab === 'exams' && (
           <div className="pb-8">
             <div className="text-center mb-10">
-              
               <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-purple-600 mx-auto rounded-full"></div>
             </div>
 
@@ -567,9 +600,11 @@ export default function StudentDashboard() {
 
               <div className="relative z-10 flex flex-col items-center w-full">
                 <div className="relative mb-8">
-                  <div className="w-36 h-36 rounded-full border-4 border-white shadow-2xl ring-4 ring-blue-100 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center text-gray-400 text-2xl font-bold select-none">
-                    {/* Blank placeholder (no photo) */}
-                  </div>
+                  <img
+                    src={profile.profileImg}
+                    alt="Profile"
+                    className="w-36 h-36 rounded-full border-4 border-white shadow-2xl ring-4 ring-blue-100 object-cover"
+                  />
                   <div className="absolute -bottom-3 -right-3 w-12 h-12 bg-green-400 rounded-full border-4 border-white shadow-xl flex items-center justify-center">
                     <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -615,24 +650,6 @@ export default function StudentDashboard() {
                       <div className="text-3xl font-bold text-gray-900 mb-2">{profile.examsCount}</div>
                       <div className="text-purple-700 font-semibold">Upcoming Exams</div>
                     </div>
-                  </div>
-                </div>
-
-                <div className="w-full bg-white border border-blue-100 rounded-2xl p-6">
-                  <h3 className="text-lg font-bold text-blue-800 mb-4">Account Actions</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <button className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl transition-all duration-300 transform hover:scale-105">
-                      Edit Profile
-                    </button>
-                    <button className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 py-3 rounded-xl transition-all duration-300 transform hover:scale-105">
-                      Change Password
-                    </button>
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full bg-red-100 hover:bg-red-200 text-red-800 py-3 rounded-xl transition-all duration-300 transform hover:scale-105 flex items-center justify-center gap-2"
-                    >
-                      <FaSignOutAlt /> Logout
-                    </button>
                   </div>
                 </div>
               </div>

@@ -5,19 +5,24 @@ const { keycloak } = require('../keycloak-config');
 const { sendExamNotifications } = require('../utils/emailNotifications');
 const router = express.Router();
 
+
 function convertDurationToHrMin(durationInMinutes) {
   const hours = Math.floor(durationInMinutes / 60);
   const minutes = durationInMinutes % 60;
   return `${hours}hr ${minutes}min`;
 }
 
-function hasTimeConflict(newSlot, existingSlot) {
-  if (new Date(newSlot.date).toDateString() !== new Date(existingSlot.date).toDateString()) return false;
+function hasTimeConflict(newSlot, existingSlot, excludeSessionId = null) {
+  // Convert dates to UTC for comparison
+  const newDateUTC = new Date(newSlot.date).toISOString().split('T')[0];
+  const existingDateUTC = new Date(existingSlot.date).toISOString().split('T')[0];
+  
+  if (newDateUTC !== existingDateUTC) return false;
   
   const parseTime = (dateStr, timeStr) => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     const date = new Date(dateStr);
-    date.setHours(hours, minutes, 0, 0);
+    date.setUTCHours(hours, minutes, 0, 0);
     return date;
   };
 
@@ -31,6 +36,22 @@ function hasTimeConflict(newSlot, existingSlot) {
     (newEnd > existingStart && newEnd <= existingEnd) ||
     (newStart <= existingStart && newEnd >= existingEnd)
   );
+}
+
+// Helper function to normalize date to UTC
+function normalizeDateToUTC(dateString) {
+  const date = new Date(dateString);
+  return new Date(Date.UTC(
+    date.getUTCFullYear(),
+    date.getUTCMonth(),
+    date.getUTCDate()
+  ));
+}
+
+// Helper function to format date for display (UTC)
+function formatDateForDisplay(dateString) {
+  const date = new Date(dateString);
+  return date.toISOString().split('T')[0]; // Return YYYY-MM-DD format
 }
 
 // Create session
@@ -47,7 +68,7 @@ router.post('/', keycloak.protect(), async (req, res) => {
       return res.status(400).json({ message: 'Location required for live sessions' });
     }
 
-    const now = new Date();
+    const now = normalizeDateToUTC(new Date());
     const normalizedClassDates = [];
     
     for (const [i, slot] of classDates.entries()) {
@@ -55,7 +76,8 @@ router.post('/', keycloak.protect(), async (req, res) => {
         return res.status(400).json({ message: `Missing data in slot ${i + 1}` });
       }
 
-      const normalizedDate = new Date(slot.date);
+      // Normalize date to UTC to avoid timezone issues
+      const normalizedDate = normalizeDateToUTC(slot.date);
       if (isNaN(normalizedDate.getTime())) {
         return res.status(400).json({ message: `Invalid date in slot ${i + 1}` });
       }
@@ -73,13 +95,19 @@ router.post('/', keycloak.protect(), async (req, res) => {
         return res.status(400).json({ message: `Invalid duration in slot ${i + 1}` });
       }
 
+      // Create date-time in UTC for comparison
       const slotDateTime = new Date(normalizedDate);
-      slotDateTime.setHours(hours, minutes, 0, 0);
+      slotDateTime.setUTCHours(hours, minutes, 0, 0);
+      
       if (slotDateTime < now) {
         return res.status(400).json({ message: `Slot ${i + 1} is in the past` });
       }
 
-      normalizedClassDates.push({ date: normalizedDate, time: slot.time, duration: slot.duration });
+      normalizedClassDates.push({ 
+        date: normalizedDate, 
+        time: slot.time, 
+        duration: slot.duration 
+      });
     }
 
     // Check conflicts
@@ -88,8 +116,9 @@ router.post('/', keycloak.protect(), async (req, res) => {
       for (const existingSlot of existingSession.classDates) {
         for (const newSlot of normalizedClassDates) {
           if (hasTimeConflict(newSlot, existingSlot)) {
+            const conflictDate = new Date(existingSlot.date).toLocaleDateString();
             return res.status(400).json({
-              message: `Conflict with "${existingSession.title}" on ${new Date(existingSlot.date).toLocaleDateString()}`
+              message: `Conflict with "${existingSession.title}" on ${conflictDate}`
             });
           }
         }
@@ -100,20 +129,29 @@ router.post('/', keycloak.protect(), async (req, res) => {
     for (let i = 0; i < normalizedClassDates.length; i++) {
       for (let j = i + 1; j < normalizedClassDates.length; j++) {
         if (hasTimeConflict(normalizedClassDates[i], normalizedClassDates[j])) {
+          const conflictDate = new Date(normalizedClassDates[i].date).toLocaleDateString();
           return res.status(400).json({
-            message: `Internal conflict on ${new Date(normalizedClassDates[i].date).toLocaleDateString()}`
+            message: `Internal conflict on ${conflictDate}`
           });
         }
       }
     }
 
     const sessionData = {
-      title, description, zoomLink, location,
+      title, 
+      description, 
+      zoomLink, 
+      location,
       classDates: normalizedClassDates.map(slot => ({
-        date: slot.date, time: slot.time, duration: slot.duration,
+        date: slot.date, 
+        time: slot.time, 
+        duration: slot.duration,
         durationFormatted: convertDurationToHrMin(slot.duration)
       })),
-      isLive, createdBy: email, recurringWeeks, examScheduled: false
+      isLive, 
+      createdBy: email, 
+      recurringWeeks, 
+      examScheduled: false
     };
 
     const newSession = new TrainingSession(sessionData);
@@ -123,7 +161,6 @@ router.post('/', keycloak.protect(), async (req, res) => {
     try {
       exam = await newSession.scheduleExam();
       
-      // Send exam notifications to enrolled students if exam was created
       if (exam) {
         await sendExamNotifications(newSession, exam);
       }
@@ -138,19 +175,35 @@ router.post('/', keycloak.protect(), async (req, res) => {
   }
 });
 
-// Update session
+// Update session - Enhanced with edit type support
 router.put('/:id', keycloak.protect(), async (req, res) => {
   try {
     const { id } = req.params;
-    const { classDates, zoomLink, location, title, description, isLive } = req.body;
+    const { 
+      classDates, 
+      zoomLink, 
+      location, 
+      title, 
+      description, 
+      isLive,
+      editType, // 'full-course' or 'specific-session'
+      sessionIndex, // index of specific session to edit (if editType is 'specific-session')
+      newDate,
+      newTime,
+      newDuration
+    } = req.body;
+    
     const email = req.user?.email;
 
     const session = await TrainingSession.findById(id);
     if (!session) return res.status(404).json({ message: 'Session not found' });
     if (session.createdBy !== email) return res.status(403).json({ message: 'Not authorized' });
 
-    if (classDates && Array.isArray(classDates)) {
-      const now = new Date();
+    let updatedClassDates = [...session.classDates];
+
+    if (editType === 'full-course' && classDates && Array.isArray(classDates)) {
+      // Full course editing - replace all dates
+      const now = normalizeDateToUTC(new Date());
       const normalizedClassDates = [];
       
       for (const [i, slot] of classDates.entries()) {
@@ -158,7 +211,8 @@ router.put('/:id', keycloak.protect(), async (req, res) => {
           return res.status(400).json({ message: `Missing data in slot ${i + 1}` });
         }
 
-        const normalizedDate = new Date(slot.date);
+        // Normalize date to UTC
+        const normalizedDate = normalizeDateToUTC(slot.date);
         if (isNaN(normalizedDate.getTime())) return res.status(400).json({ message: `Invalid date in slot ${i + 1}` });
 
         const [hours, minutes] = slot.time.split(':').map(Number);
@@ -174,39 +228,123 @@ router.put('/:id', keycloak.protect(), async (req, res) => {
           return res.status(400).json({ message: `Invalid duration in slot ${i + 1}` });
         }
 
+        // Create date-time in UTC for comparison
         const slotDateTime = new Date(normalizedDate);
-        slotDateTime.setHours(hours, minutes, 0, 0);
+        slotDateTime.setUTCHours(hours, minutes, 0, 0);
         if (slotDateTime < now) return res.status(400).json({ message: `Slot ${i + 1} is in the past` });
 
-        normalizedClassDates.push({ date: normalizedDate, time: slot.time, duration: slot.duration });
+        normalizedClassDates.push({ 
+          date: normalizedDate, 
+          time: slot.time, 
+          duration: slot.duration 
+        });
       }
 
+      // Check conflicts with other sessions
       const existingSessions = await TrainingSession.find({ createdBy: email, _id: { $ne: id } });
       for (const existingSession of existingSessions) {
         for (const existingSlot of existingSession.classDates) {
           for (const newSlot of normalizedClassDates) {
             if (hasTimeConflict(newSlot, existingSlot)) {
-              return res.status(400).json({ message: `Conflict with existing session` });
+              const conflictDate = new Date(existingSlot.date).toLocaleDateString();
+              return res.status(400).json({ 
+                message: `Conflict with "${existingSession.title}" on ${conflictDate}` 
+              });
             }
           }
         }
       }
 
+      // Check internal conflicts
       for (let i = 0; i < normalizedClassDates.length; i++) {
         for (let j = i + 1; j < normalizedClassDates.length; j++) {
           if (hasTimeConflict(normalizedClassDates[i], normalizedClassDates[j])) {
-            return res.status(400).json({ message: `Internal conflict between slots` });
+            const conflictDate = new Date(normalizedClassDates[i].date).toLocaleDateString();
+            return res.status(400).json({ 
+              message: `Internal conflict between slots on ${conflictDate}` 
+            });
           }
         }
       }
+
+      updatedClassDates = normalizedClassDates.map(slot => ({
+        date: slot.date, 
+        time: slot.time, 
+        duration: slot.duration,
+        durationFormatted: convertDurationToHrMin(slot.duration)
+      }));
+
+    } else if (editType === 'specific-session' && sessionIndex !== undefined && newDate && newTime) {
+      // Specific session editing - update only one session
+      if (sessionIndex < 0 || sessionIndex >= updatedClassDates.length) {
+        return res.status(400).json({ message: 'Invalid session index' });
+      }
+
+      const now = normalizeDateToUTC(new Date());
+      // Normalize new date to UTC
+      const normalizedDate = normalizeDateToUTC(newDate);
+      
+      if (isNaN(normalizedDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid date' });
+      }
+
+      const [hours, minutes] = newTime.split(':').map(Number);
+      if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+        return res.status(400).json({ message: 'Invalid time' });
+      }
+
+      if (hours < 6 || (hours >= 18 && minutes > 0)) {
+        return res.status(400).json({ message: 'Time must be between 6:00 AM and 6:00 PM' });
+      }
+
+      const newDurationValue = newDuration || updatedClassDates[sessionIndex].duration;
+      if (isNaN(newDurationValue) || newDurationValue <= 0) {
+        return res.status(400).json({ message: 'Invalid duration' });
+      }
+
+      // Create date-time in UTC for comparison
+      const slotDateTime = new Date(normalizedDate);
+      slotDateTime.setUTCHours(hours, minutes, 0, 0);
+      if (slotDateTime < now) {
+        return res.status(400).json({ message: 'Selected date and time is in the past' });
+      }
+
+      const updatedSlot = {
+        date: normalizedDate,
+        time: newTime,
+        duration: newDurationValue,
+        durationFormatted: convertDurationToHrMin(newDurationValue)
+      };
+
+      // Check conflicts with other sessions
+      const existingSessions = await TrainingSession.find({ createdBy: email, _id: { $ne: id } });
+      for (const existingSession of existingSessions) {
+        for (const existingSlot of existingSession.classDates) {
+          if (hasTimeConflict(updatedSlot, existingSlot)) {
+            const conflictDate = new Date(existingSlot.date).toLocaleDateString();
+            return res.status(400).json({ 
+              message: `Conflict with "${existingSession.title}" on ${conflictDate}` 
+            });
+          }
+        }
+      }
+
+      // Check conflicts with other sessions in the same course
+      for (let i = 0; i < updatedClassDates.length; i++) {
+        if (i !== sessionIndex && hasTimeConflict(updatedSlot, updatedClassDates[i])) {
+          const conflictDate = new Date(updatedClassDates[i].date).toLocaleDateString();
+          return res.status(400).json({ 
+            message: `Conflict with another session in this course on ${conflictDate}` 
+          });
+        }
+      }
+
+      updatedClassDates[sessionIndex] = updatedSlot;
     }
 
     const updateData = {};
-    if (classDates) {
-      updateData.classDates = classDates.map(slot => ({
-        date: new Date(slot.date), time: slot.time, duration: slot.duration,
-        durationFormatted: convertDurationToHrMin(slot.duration)
-      }));
+    if (classDates || editType) {
+      updateData.classDates = updatedClassDates;
     }
     if (zoomLink !== undefined) updateData.zoomLink = zoomLink;
     if (location !== undefined) updateData.location = location;
@@ -217,12 +355,12 @@ router.put('/:id', keycloak.protect(), async (req, res) => {
     const updated = await TrainingSession.findByIdAndUpdate(id, updateData, { new: true }).populate('scheduledExam');
     if (!updated) return res.status(404).json({ message: 'Session not found' });
     
-    if (classDates) {
+    // Reschedule exam if class dates changed
+    if (classDates || editType) {
       try {
         if (updated.scheduledExam) await Exam.findByIdAndDelete(updated.scheduledExam);
         const newExam = await updated.scheduleExam();
         
-        // Send notifications if exam was rescheduled
         if (newExam) {
           await sendExamNotifications(updated, newExam);
         }
@@ -230,6 +368,7 @@ router.put('/:id', keycloak.protect(), async (req, res) => {
         const finalSession = await TrainingSession.findById(id).populate('scheduledExam');
         return res.json(finalSession);
       } catch (error) {
+        console.error('Error rescheduling exam:', error);
         return res.status(500).json({ message: 'Error rescheduling exam' });
       }
     }
@@ -246,7 +385,17 @@ router.get('/mine', keycloak.protect(), async (req, res) => {
     const sessions = await TrainingSession.find({ createdBy: req.user.email })
       .populate('scheduledExam')
       .sort({ createdAt: -1 });
-    res.json(sessions);
+    
+    // Ensure dates are properly formatted for frontend
+    const sessionsWithFormattedDates = sessions.map(session => ({
+      ...session._doc,
+      classDates: session.classDates.map(slot => ({
+        ...slot._doc,
+        date: slot.date.toISOString().split('T')[0] // Ensure consistent date format
+      }))
+    }));
+    
+    res.json(sessionsWithFormattedDates);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -258,7 +407,17 @@ router.get('/:id', keycloak.protect(), async (req, res) => {
     const session = await TrainingSession.findById(req.params.id).populate('scheduledExam');
     if (!session) return res.status(404).json({ message: 'Session not found' });
     if (session.createdBy !== req.user.email) return res.status(403).json({ message: 'Not authorized' });
-    res.json(session);
+    
+    // Format dates for consistent display
+    const sessionWithFormattedDates = {
+      ...session._doc,
+      classDates: session.classDates.map(slot => ({
+        ...slot._doc,
+        date: slot.date.toISOString().split('T')[0]
+      }))
+    };
+    
+    res.json(sessionWithFormattedDates);
   } catch (err) {
     res.status(500).json({ message: 'Server error' });
   }
@@ -289,7 +448,6 @@ router.post('/:id/create-exam', keycloak.protect(), async (req, res) => {
     if (session.scheduledExam) await Exam.findByIdAndDelete(session.scheduledExam);
     const exam = await session.scheduleExam();
     
-    // Send notifications to enrolled students
     if (exam) {
       await sendExamNotifications(session, exam);
     }

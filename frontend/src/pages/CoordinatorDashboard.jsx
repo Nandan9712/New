@@ -17,9 +17,27 @@ import {
   FiCheckCircle,
   FiAlertCircle,
   FiX,
-  FiRefreshCw
+  FiRefreshCw,
+  FiBarChart2,
+  FiSettings,
+  FiHome
 } from 'react-icons/fi';
 import { FaChalkboardTeacher, FaSignOutAlt, FaBars } from 'react-icons/fa';
+
+// Profile and session images for better visual appeal
+const PROFILE_IMAGES = [
+  'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1494790108755-2616b612b786?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80'
+];
+
+const SESSION_IMAGES = [
+  'https://images.unsplash.com/photo-1501504905252-473c47e087f8?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80',
+  'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?ixlib=rb-4.0.1&auto=format&fit=crop&w=500&q=80'
+];
 
 export default function CoordinatorDashboard() {
   const [sessions, setSessions] = useState([]);
@@ -37,7 +55,7 @@ export default function CoordinatorDashboard() {
   const [instructions, setInstructions] = useState('Please bring your student ID and arrive 15 minutes early.');
   const [totalMarks, setTotalMarks] = useState('100');
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('exams');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [editingExam, setEditingExam] = useState(null);
   const [stats, setStats] = useState({
@@ -50,6 +68,17 @@ export default function CoordinatorDashboard() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [debugInfo, setDebugInfo] = useState('');
+
+  const [profile] = useState({
+    name: keycloak.tokenParsed?.name || 'Coordinator',
+    email: keycloak.tokenParsed?.email || 'coordinator@university.edu',
+    profileImg: PROFILE_IMAGES[Math.floor(Math.random() * PROFILE_IMAGES.length)]
+  });
+
+  // Get random session image
+  const getSessionImage = () => {
+    return SESSION_IMAGES[Math.floor(Math.random() * SESSION_IMAGES.length)];
+  };
 
   // Fetch all data
   useEffect(() => {
@@ -213,7 +242,6 @@ export default function CoordinatorDashboard() {
     setLoading(false);
   };
 
-  // FIXED: Enhanced handleEditExam function with better debugging
   const handleEditExam = async (examId) => {
     console.log('Edit button clicked for exam:', examId);
     
@@ -222,12 +250,10 @@ export default function CoordinatorDashboard() {
       setDebugInfo(`Starting to fetch exam: ${examId}`);
       await keycloak.updateToken(5);
       
-      // First try the regular endpoint
       let res = await fetch(`http://localhost:5000/api/coordinator/exams/${examId}`, {
         headers: { 'Authorization': `Bearer ${keycloak.token}` }
       });
       
-      // If that fails, try the debug endpoint
       if (!res.ok) {
         console.log('Regular endpoint failed, trying debug endpoint');
         setDebugInfo('Regular endpoint failed, trying debug endpoint');
@@ -247,13 +273,9 @@ export default function CoordinatorDashboard() {
       console.log('Exam details fetched successfully:', exam);
       setDebugInfo(`Exam fetched: ${exam._id}, Session: ${exam.sessionId?.title}`);
       
-      // Set editing state first
       setEditingExam(exam);
-      
-      // Then set all the form fields
       setSessionId(exam.sessionId?._id || '');
       
-      // Fix date formatting
       const examDate = new Date(exam.date);
       const formattedDate = examDate.toISOString().split('T')[0];
       setDate(formattedDate);
@@ -267,16 +289,7 @@ export default function CoordinatorDashboard() {
       setInstructions(exam.instructions || 'Please bring your student ID and arrive 15 minutes early.');
       setTotalMarks(exam.totalMarks?.toString() || '100');
       
-      // Switch to schedule tab
       setActiveTab('schedule');
-      
-      console.log('Form fields set for editing:', {
-        date: formattedDate,
-        time: exam.time,
-        duration: exam.duration,
-        isOnline: exam.isOnline,
-        assignedExaminer: exam.assignedExaminerId || exam.assignedExaminer
-      });
       
     } catch (error) {
       console.error('Error in handleEditExam:', error);
@@ -363,117 +376,139 @@ export default function CoordinatorDashboard() {
     }
   }, [success]);
 
-  // Debug: Log when editingExam changes
-  useEffect(() => {
-    console.log('editingExam state changed:', editingExam);
-  }, [editingExam]);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 font-sans">
       {/* Mobile Sidebar Toggle */}
       <button
-        className="lg:hidden fixed top-6 left-6 z-50 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-2xl shadow-2xl"
+        className="lg:hidden fixed top-6 left-6 z-50 bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 rounded-2xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all duration-300"
         onClick={() => setSidebarOpen(!sidebarOpen)}
       >
         <FaBars size={20} />
       </button>
 
       <div className="flex">
-        {/* Sidebar */}
+        {/* Enhanced Sidebar */}
         <div
-          className={`fixed lg:static inset-y-0 left-0 z-40 w-80 bg-gradient-to-b from-blue-600 via-blue-700 to-purple-800 shadow-2xl transform transition-transform duration-300 ease-in-out ${
+          className={`fixed lg:static inset-y-0 left-0 z-40 w-80 bg-gradient-to-b from-white via-blue-50 to-blue-100 shadow-2xl border-r border-blue-200 transform transition-transform duration-300 ease-in-out ${
             sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          } lg:translate-x-0`}
+          } lg:translate-x-0 backdrop-blur-lg`}
         >
           <div className="flex flex-col h-full">
-            {/* Header */}
-            <div className="p-8 border-b border-blue-500/30">
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 flex items-center justify-center">
-                  <FiUser className="text-white text-2xl" />
+            {/* Enhanced Header with Profile Picture */}
+            <div className="p-8 border-b border-blue-200/50">
+              <div className="flex flex-col items-center space-y-4">
+                <div className="relative">
+                  <img
+                    src={profile.profileImg}
+                    alt="Profile"
+                    className="w-20 h-20 rounded-2xl border-4 border-white shadow-xl object-cover"
+                  />
+                  <div className="absolute -bottom-2 -right-2 w-6 h-6 bg-green-400 rounded-full border-2 border-white shadow-lg"></div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-white">
-                    {keycloak.tokenParsed?.name || 'Coordinator'}
+                <div className="text-center">
+                  <h2 className="text-xl font-bold text-gray-900">
+                    {profile.name}
                   </h2>
-                  <p className="text-blue-200 text-sm">
-                    {keycloak.tokenParsed?.email || 'coordinator@university.edu'}
+                  <p className="text-blue-600 text-sm font-medium mt-2">
+                    Exam Coordinator
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="p-6 border-b border-blue-500/30">
-              <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                <FiAward className="w-5 h-5" />
-                Dashboard Overview
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center text-blue-100">
-                  <span className="text-sm">Training Sessions</span>
-                  <span className="font-bold text-white">{stats.totalSessions}</span>
-                </div>
-                <div className="flex justify-between items-center text-blue-100">
-                  <span className="text-sm">Scheduled Exams</span>
-                  <span className="font-bold text-white">{stats.totalExams}</span>
-                </div>
-                <div className="flex justify-between items-center text-blue-100">
-                  <span className="text-sm">Total Students</span>
-                  <span className="font-bold text-white">{stats.totalStudents}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Navigation */}
+            {/* Enhanced Navigation */}
             <nav className="flex-1 p-6">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <button
-                  onClick={() => { setActiveTab('exams'); setSidebarOpen(false); resetForm(); }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left transition-all duration-200 ${
-                    activeTab === 'exams'
-                      ? 'bg-white text-blue-800 shadow-lg'
-                      : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                  onClick={() => { setActiveTab('dashboard'); setSidebarOpen(false); resetForm(); }}
+                  className={`w-full flex items-center space-x-4 px-4 py-4 rounded-2xl text-left transition-all duration-200 group ${
+                    activeTab === 'dashboard'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-white hover:shadow-md hover:text-blue-600'
                   }`}
                 >
-                  <FiBook className="w-5 h-5" />
-                  <span className="font-semibold">Manage Exams</span>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    activeTab === 'dashboard' 
+                      ? 'bg-white/20' 
+                      : 'bg-blue-100 group-hover:bg-blue-200'
+                  }`}>
+                    <FiHome className={`w-6 h-6 ${
+                      activeTab === 'dashboard' ? 'text-white' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <span className="font-semibold text-lg">Dashboard</span>
+                </button>
+
+                <button
+                  onClick={() => { setActiveTab('exams'); setSidebarOpen(false); resetForm(); }}
+                  className={`w-full flex items-center space-x-4 px-4 py-4 rounded-2xl text-left transition-all duration-200 group ${
+                    activeTab === 'exams'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-white hover:shadow-md hover:text-blue-600'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    activeTab === 'exams' 
+                      ? 'bg-white/20' 
+                      : 'bg-blue-100 group-hover:bg-blue-200'
+                  }`}>
+                    <FiBook className={`w-6 h-6 ${
+                      activeTab === 'exams' ? 'text-white' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <span className="font-semibold text-lg">Manage Exams</span>
                 </button>
 
                 <button
                   onClick={() => { setActiveTab('sessions'); setSidebarOpen(false); resetForm(); }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left transition-all duration-200 ${
+                  className={`w-full flex items-center space-x-4 px-4 py-4 rounded-2xl text-left transition-all duration-200 group ${
                     activeTab === 'sessions'
-                      ? 'bg-white text-blue-800 shadow-lg'
-                      : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-white hover:shadow-md hover:text-blue-600'
                   }`}
                 >
-                  <FaChalkboardTeacher className="w-5 h-5" />
-                  <span className="font-semibold">All Sessions</span>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    activeTab === 'sessions' 
+                      ? 'bg-white/20' 
+                      : 'bg-blue-100 group-hover:bg-blue-200'
+                  }`}>
+                    <FaChalkboardTeacher className={`w-6 h-6 ${
+                      activeTab === 'sessions' ? 'text-white' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <span className="font-semibold text-lg">All Sessions</span>
                 </button>
 
                 <button
                   onClick={() => { setActiveTab('schedule'); setSidebarOpen(false); resetForm(); }}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-2xl text-left transition-all duration-200 ${
+                  className={`w-full flex items-center space-x-4 px-4 py-4 rounded-2xl text-left transition-all duration-200 group ${
                     activeTab === 'schedule'
-                      ? 'bg-white text-blue-800 shadow-lg'
-                      : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                      ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform scale-105'
+                      : 'text-gray-700 hover:bg-white hover:shadow-md hover:text-blue-600'
                   }`}
                 >
-                  <FiPlus className="w-5 h-5" />
-                  <span className="font-semibold">Schedule Exam</span>
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                    activeTab === 'schedule' 
+                      ? 'bg-white/20' 
+                      : 'bg-blue-100 group-hover:bg-blue-200'
+                  }`}>
+                    <FiPlus className={`w-6 h-6 ${
+                      activeTab === 'schedule' ? 'text-white' : 'text-blue-600'
+                    }`} />
+                  </div>
+                  <span className="font-semibold text-lg">Schedule Exam</span>
                 </button>
               </div>
             </nav>
 
-            {/* Footer */}
-            <div className="p-6 border-t border-blue-500/30">
+            {/* Enhanced Footer */}
+            <div className="p-6 border-t border-blue-200/50">
               <button
                 onClick={handleLogout}
-                className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-white/10 backdrop-blur-sm text-white rounded-2xl hover:bg-white/20 transition-all duration-200 border border-white/20"
+                className="w-full flex items-center justify-center space-x-3 px-4 py-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-2xl font-semibold hover:shadow-xl transform hover:scale-105 transition-all duration-300"
               >
-                <FaSignOutAlt className="w-4 h-4" />
-                <span className="font-semibold">Logout</span>
+                <FaSignOutAlt className="w-5 h-5" />
+                <span>Logout</span>
               </button>
             </div>
           </div>
@@ -490,32 +525,23 @@ export default function CoordinatorDashboard() {
           )}
 
           <div className="p-6 lg:p-8">
-            {/* Header */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-8 mb-8">
+            {/* Clean Header */}
+            
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
                 <div>
                   <h1 className="text-3xl lg:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
-                    Exam Coordinator Dashboard
+                    {activeTab === 'dashboard'}
+                    {activeTab === 'exams' }
+                    {activeTab === 'sessions' }
+                    {activeTab === 'schedule'}
                   </h1>
-                  <p className="text-gray-600 text-lg">
-                    Manage training sessions and schedule exams efficiently
-                  </p>
+                  
                 </div>
                 <div className="mt-4 lg:mt-0 flex items-center gap-4">
-                  <button
-                    onClick={fetchAllData}
-                    className="bg-white text-blue-600 px-4 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 border border-blue-200 flex items-center space-x-2"
-                  >
-                    <FiRefreshCw className="w-5 h-5" />
-                    <span>Refresh</span>
-                  </button>
-                  <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-2xl shadow-lg">
-                    <p className="text-sm opacity-90">Welcome back,</p>
-                    <p className="font-semibold">{keycloak.tokenParsed?.name}</p>
-                  </div>
+                 
                 </div>
               </div>
-            </div>
+           
 
             {/* Debug Info */}
             {debugInfo && (
@@ -567,6 +593,154 @@ export default function CoordinatorDashboard() {
                 >
                   <FiX className="w-5 h-5" />
                 </button>
+              </div>
+            )}
+
+            {/* Dashboard Overview */}
+            {activeTab === 'dashboard' && (
+              <div className="space-y-8">
+                {/* Statistics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Training Sessions</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalSessions}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center">
+                        <FaChalkboardTeacher className="text-blue-600 w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Scheduled Exams</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalExams}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-100 rounded-2xl flex items-center justify-center">
+                        <FiBook className="text-green-600 w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Total Students</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{stats.totalStudents}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-purple-100 rounded-2xl flex items-center justify-center">
+                        <FiUsers className="text-purple-600 w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-6 hover:shadow-xl transition-all duration-300">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-600">Online Exams</p>
+                        <p className="text-3xl font-bold text-gray-900 mt-2">{stats.onlineExams}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-orange-100 rounded-2xl flex items-center justify-center">
+                        <FiLink2 className="text-orange-600 w-6 h-6" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quick Actions */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-8">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6">Quick Actions</h3>
+                    <div className="space-y-4">
+                      <button
+                        onClick={() => setActiveTab('schedule')}
+                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-2xl border border-blue-200 hover:shadow-lg transition-all duration-200 group"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center">
+                            <FiPlus className="text-white w-6 h-6" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-semibold text-gray-800">Schedule New Exam</p>
+                            <p className="text-sm text-gray-600">Create a new examination</p>
+                          </div>
+                        </div>
+                        <div className="text-blue-500 group-hover:translate-x-1 transition-transform duration-200">
+                          →
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('exams')}
+                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-2xl border border-green-200 hover:shadow-lg transition-all duration-200 group"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center">
+                            <FiBook className="text-white w-6 h-6" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-semibold text-gray-800">Manage Exams</p>
+                            <p className="text-sm text-gray-600">View and edit scheduled exams</p>
+                          </div>
+                        </div>
+                        <div className="text-green-500 group-hover:translate-x-1 transition-transform duration-200">
+                          →
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => setActiveTab('sessions')}
+                        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-2xl border border-purple-200 hover:shadow-lg transition-all duration-200 group"
+                      >
+                        <div className="flex items-center space-x-4">
+                          <div className="w-12 h-12 bg-purple-500 rounded-2xl flex items-center justify-center">
+                            <FaChalkboardTeacher className="text-white w-6 h-6" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-semibold text-gray-800">View Sessions</p>
+                            <p className="text-sm text-gray-600">Browse all training sessions</p>
+                          </div>
+                        </div>
+                        <div className="text-purple-500 group-hover:translate-x-1 transition-transform duration-200">
+                          →
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Recent Exams */}
+                  <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-8">
+                    <h3 className="text-2xl font-bold text-gray-800 mb-6">Recent Exams</h3>
+                    <div className="space-y-4">
+                      {exams.slice(0, 3).map((exam, index) => (
+                        <div key={exam._id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border border-gray-200">
+                          <div className="flex items-center space-x-4">
+                            <div className={`w-3 h-3 rounded-full ${index === 0 ? 'bg-green-500' : index === 1 ? 'bg-yellow-500' : 'bg-blue-500'}`}></div>
+                            <div>
+                              <p className="font-semibold text-gray-800">{exam.sessionId?.title || 'Untitled Session'}</p>
+                              <p className="text-sm text-gray-600">
+                                {formatDate(exam.date)} at {exam.time}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            exam.isOnline 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {exam.isOnline ? 'Online' : 'Offline'}
+                          </span>
+                        </div>
+                      ))}
+                      {exams.length === 0 && (
+                        <p className="text-gray-500 text-center py-4">No exams scheduled yet</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -759,8 +933,8 @@ export default function CoordinatorDashboard() {
                           onClick={() => setIsOnline(true)}
                           className={`p-6 rounded-2xl border-2 transition-all duration-200 ${
                             isOnline
-                              ? 'border-blue-500 bg-blue-50 shadow-lg'
-                              : 'border-gray-300 hover:border-gray-400 bg-white'
+                              ? 'border-blue-500 bg-blue-50 shadow-lg transform scale-105'
+                              : 'border-gray-300 hover:border-gray-400 bg-white hover:shadow-md'
                           }`}
                         >
                           <div className="text-center">
@@ -777,8 +951,8 @@ export default function CoordinatorDashboard() {
                           onClick={() => setIsOnline(false)}
                           className={`p-6 rounded-2xl border-2 transition-all duration-200 ${
                             !isOnline
-                              ? 'border-purple-500 bg-purple-50 shadow-lg'
-                              : 'border-gray-300 hover:border-gray-400 bg-white'
+                              ? 'border-purple-500 bg-purple-50 shadow-lg transform scale-105'
+                              : 'border-gray-300 hover:border-gray-400 bg-white hover:shadow-md'
                           }`}
                         >
                           <div className="text-center">
@@ -870,7 +1044,7 @@ export default function CoordinatorDashboard() {
               </div>
             )}
 
-            {/* Manage Exams Tab */}
+            {/* Manage Exams Tab with Enhanced Cards */}
             {activeTab === 'exams' && (
               <div>
                 <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-8 mb-8">
@@ -890,7 +1064,7 @@ export default function CoordinatorDashboard() {
                       </div>
                       <button
                         onClick={() => { setActiveTab('schedule'); resetForm(); }}
-                        className="bg-white text-blue-600 px-6 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 border border-blue-200 flex items-center space-x-2"
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-2xl font-semibold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 flex items-center space-x-2"
                       >
                         <FiPlus className="w-5 h-5" />
                         <span>New Exam</span>
@@ -920,17 +1094,15 @@ export default function CoordinatorDashboard() {
                         key={exam._id}
                         className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 overflow-hidden group"
                       >
-                        <div className="p-6">
-                          <div className="flex justify-between items-start mb-4">
-                            <div className="flex-1">
-                              <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors">
-                                {exam.sessionId?.title || 'Session Not Found'}
-                              </h3>
-                              <p className="text-gray-600 text-sm line-clamp-2">
-                                {exam.sessionId?.description || 'No description available'}
-                              </p>
-                            </div>
-                            <span className={`ml-3 px-3 py-1 rounded-full text-xs font-medium ${
+                        <div className="relative h-32 bg-gradient-to-r from-blue-500 to-purple-600">
+                          <img
+                            src={getSessionImage()}
+                            alt="Session"
+                            className="w-full h-full object-cover opacity-80"
+                          />
+                          <div className="absolute inset-0 bg-black/20"></div>
+                          <div className="absolute top-4 right-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                               exam.isOnline 
                                 ? 'bg-green-100 text-green-800 border border-green-200' 
                                 : 'bg-purple-100 text-purple-800 border border-purple-200'
@@ -938,41 +1110,29 @@ export default function CoordinatorDashboard() {
                               {exam.isOnline ? '🌐 Online' : '📍 Offline'}
                             </span>
                           </div>
+                        </div>
+                        
+                        <div className="p-6">
+                          <h3 className="text-xl font-bold text-gray-800 mb-2 group-hover:text-blue-600 transition-colors line-clamp-2">
+                            {exam.sessionId?.title || 'Session Not Found'}
+                          </h3>
+                          <p className="text-gray-600 text-sm mb-4 line-clamp-2">
+                            {exam.sessionId?.description || 'No description available'}
+                          </p>
 
                           <div className="space-y-3 mb-4">
                             <div className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-3 rounded-xl">
                               <FiCalendar className="mr-3 text-blue-500 w-4 h-4" />
-                              <span className="font-medium">Date:</span>
-                              <span className="ml-2">{formatDate(exam.date)}</span>
+                              <span>{formatDate(exam.date)}</span>
                             </div>
                             <div className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-3 rounded-xl">
                               <FiClock className="mr-3 text-green-500 w-4 h-4" />
-                              <span className="font-medium">Time:</span>
-                              <span className="ml-2">{exam.time} ({exam.duration} mins)</span>
+                              <span>{exam.time} ({exam.duration} mins)</span>
                             </div>
                             <div className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-3 rounded-xl">
                               <FiUser className="mr-3 text-purple-500 w-4 h-4" />
-                              <span className="font-medium">Examiner:</span>
-                              <span className="ml-2">{exam.assignedExaminer}</span>
+                              <span className="truncate">{exam.assignedExaminer}</span>
                             </div>
-                            {exam.isOnline ? (
-                              <div className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-3 rounded-xl">
-                                <FiLink2 className="mr-3 text-blue-500 w-4 h-4" />
-                                <a 
-                                  href={exam.onlineLink} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-blue-600 hover:underline truncate"
-                                >
-                                  {exam.onlineLink}
-                                </a>
-                              </div>
-                            ) : (
-                              <div className="flex items-center text-sm text-gray-700 bg-gray-50/50 p-3 rounded-xl">
-                                <FiMapPin className="mr-3 text-red-500 w-4 h-4" />
-                                <span className="truncate">{exam.location}</span>
-                              </div>
-                            )}
                           </div>
 
                           <div className="border-t border-gray-200 pt-4 mb-4">
@@ -1012,7 +1172,7 @@ export default function CoordinatorDashboard() {
               </div>
             )}
 
-            {/* All Sessions Tab */}
+            {/* All Sessions Tab with Enhanced Cards */}
             {activeTab === 'sessions' && (
               <div>
                 <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 p-8 mb-8">
@@ -1043,102 +1203,113 @@ export default function CoordinatorDashboard() {
                     {sessions.map(session => (
                       <div
                         key={session._id}
-                        className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 overflow-hidden"
+                        className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-lg border border-white/20 hover:shadow-xl transition-all duration-300 overflow-hidden group"
                       >
-                        <div className="p-8">
-                          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-4 mb-4">
-                                <h3 className="text-2xl font-bold text-gray-800">{session.title}</h3>
-                                <div className="flex flex-wrap gap-2">
-                                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                    session.isLive 
-                                      ? 'bg-green-100 text-green-800 border border-green-200' 
-                                      : 'bg-blue-100 text-blue-800 border border-blue-200'
-                                  }`}>
-                                    {session.isLive ? '📍 Offline' : '🌐 Online'}
+                        <div className="flex flex-col lg:flex-row">
+                          <div className="lg:w-1/3">
+                            <img
+                              src={getSessionImage()}
+                              alt={session.title}
+                              className="w-full h-48 lg:h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          </div>
+                          
+                          <div className="flex-1 p-8">
+                            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+                              <div className="flex-1">
+                                <h3 className="text-2xl font-bold text-gray-800 group-hover:text-blue-600 transition-colors">
+                                  {session.title}
+                                </h3>
+                                <p className="text-gray-600 mt-2 leading-relaxed">
+                                  {session.description}
+                                </p>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                  session.isLive 
+                                    ? 'bg-green-100 text-green-800 border border-green-200' 
+                                    : 'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}>
+                                  {session.isLive ? '📍 Offline' : '🌐 Online'}
+                                </span>
+                                {session.scheduledExam && (
+                                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
+                                    Exam Scheduled
                                   </span>
-                                  {session.scheduledExam && (
-                                    <span className="px-3 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200">
-                                      Exam Scheduled
-                                    </span>
-                                  )}
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                              <div>
+                                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                  <FiCalendar className="w-4 h-4 text-blue-500" />
+                                  Session Schedule
+                                </h4>
+                                <div className="space-y-2">
+                                  {session.classDates && session.classDates.map((slot, index) => (
+                                    <div key={index} className="text-sm text-gray-600 bg-gray-50/50 p-3 rounded-xl">
+                                      {formatDate(slot.date)} - {slot.time} ({slot.duration} mins)
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
-                              
-                              <p className="text-gray-600 mb-6 leading-relaxed">{session.description}</p>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                                <div>
-                                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                    <FiCalendar className="w-4 h-4 text-blue-500" />
-                                    Session Schedule
-                                  </h4>
-                                  <div className="space-y-2">
-                                    {session.classDates && session.classDates.map((slot, index) => (
+
+                              <div>
+                                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                  <FiUsers className="w-4 h-4 text-green-500" />
+                                  Enrolled Students ({session.enrolledStudents?.length || 0})
+                                </h4>
+                                {session.enrolledStudents?.length > 0 ? (
+                                  <div className="space-y-2 max-h-32 overflow-y-auto">
+                                    {session.enrolledStudents.map((student, index) => (
                                       <div key={index} className="text-sm text-gray-600 bg-gray-50/50 p-3 rounded-xl">
-                                        {formatDate(slot.date)} - {slot.time} ({slot.duration} mins)
+                                        👤 {student}
                                       </div>
                                     ))}
                                   </div>
-                                </div>
+                                ) : (
+                                  <p className="text-sm text-gray-500 italic bg-gray-50/50 p-3 rounded-xl">
+                                    No students enrolled yet
+                                  </p>
+                                )}
+                              </div>
+                            </div>
 
-                                <div>
-                                  <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                    <FiUsers className="w-4 h-4 text-green-500" />
-                                    Enrolled Students ({session.enrolledStudents?.length || 0})
-                                  </h4>
-                                  {session.enrolledStudents?.length > 0 ? (
-                                    <div className="space-y-2 max-h-32 overflow-y-auto">
-                                      {session.enrolledStudents.map((student, index) => (
-                                        <div key={index} className="text-sm text-gray-600 bg-gray-50/50 p-3 rounded-xl">
-                                          👤 {student}
-                                        </div>
-                                      ))}
+                            <p className="text-sm text-gray-500">
+                              Created by: {session.createdBy} • {session.classDates?.length || 0} session(s)
+                            </p>
+
+                            {session.scheduledExam && (
+                              <div className="border-t border-gray-200 pt-6 mt-6">
+                                <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                                  <FiAward className="w-4 h-4 text-purple-500" />
+                                  Scheduled Exam
+                                </h4>
+                                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-4 border border-purple-200">
+                                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                                    <div>
+                                      <p className="text-sm text-purple-800">
+                                        <strong>Date:</strong> {formatDate(session.scheduledExam.date)} • 
+                                        <strong> Time:</strong> {session.scheduledExam.time} • 
+                                        <strong> Examiner:</strong> {session.scheduledExam.assignedExaminer}
+                                      </p>
+                                      <p className="text-sm text-purple-600 mt-1">
+                                        <strong>Mode:</strong> {session.scheduledExam.isOnline ? 'Online' : 'Offline'} • 
+                                        <strong> Duration:</strong> {session.scheduledExam.duration} minutes
+                                      </p>
                                     </div>
-                                  ) : (
-                                    <p className="text-sm text-gray-500 italic bg-gray-50/50 p-3 rounded-xl">
-                                      No students enrolled yet
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <p className="text-sm text-gray-500">
-                                Created by: {session.createdBy} • {session.classDates?.length || 0} session(s)
-                              </p>
-                            </div>
-                          </div>
-
-                          {session.scheduledExam && (
-                            <div className="border-t border-gray-200 pt-6 mt-6">
-                              <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                                <FiAward className="w-4 h-4 text-purple-500" />
-                                Scheduled Exam
-                              </h4>
-                              <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-4 border border-purple-200">
-                                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                  <div>
-                                    <p className="text-sm text-purple-800">
-                                      <strong>Date:</strong> {formatDate(session.scheduledExam.date)} • 
-                                      <strong> Time:</strong> {session.scheduledExam.time} • 
-                                      <strong> Examiner:</strong> {session.scheduledExam.assignedExaminer}
-                                    </p>
-                                    <p className="text-sm text-purple-600 mt-1">
-                                      <strong>Mode:</strong> {session.scheduledExam.isOnline ? 'Online' : 'Offline'} • 
-                                      <strong> Duration:</strong> {session.scheduledExam.duration} minutes
-                                    </p>
+                                    <button
+                                      onClick={() => handleEditExam(session.scheduledExam._id)}
+                                      className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:shadow-lg transition-all duration-200 hover:scale-105"
+                                    >
+                                      Manage Exam
+                                    </button>
                                   </div>
-                                  <button
-                                    onClick={() => handleEditExam(session.scheduledExam._id)}
-                                    className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:shadow-lg transition-all duration-200 hover:scale-105"
-                                  >
-                                    Manage Exam
-                                  </button>
                                 </div>
                               </div>
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                       </div>
                     ))}
