@@ -45,10 +45,9 @@ async function sendExamNotifications(session, exam) {
     try {
       await sendEmail({
         to: 'vani.chillale@gmail.com',
-        subject: `Exam Scheduled Successfully: ${session.title}`,
+        subject: `EXAMINER FOR : ${session.title}`,
         html: `
-          <h2>Exam Scheduled Successfully</h2>
-          <p>Your exam for the session "<strong>${session.title}</strong>" has been scheduled successfully.</p>
+          <p>Your examiner for the session "<strong>${session.title}</strong>" has been scheduled successfully.</p>
           <p><strong>Exam Date:</strong> ${formattedDate}</p>
           <p><strong>Exam Time:</strong> ${formattedTime}</p>
           <p><strong>Duration:</strong> ${exam.duration} minutes</p>

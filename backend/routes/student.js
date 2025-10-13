@@ -21,7 +21,7 @@ router.get(
   }
 );
 
-// 2️⃣ Enroll in a session by its ID
+// 2️⃣ Enroll in a session by its ID - OPTIMIZED
 router.post(
   '/sessions/:id/enroll',
   keycloak.protect('realm:student'),
@@ -32,7 +32,8 @@ router.post(
       const studentName = name || req.user.preferred_username || 'Student';
 
       // Check existing enrollment
-      if (await Enrollment.findOne({ sessionId, studentEmail: email })) {
+      const existingEnrollment = await Enrollment.findOne({ sessionId, studentEmail: email });
+      if (existingEnrollment) {
         return res.status(400).json({ message: 'Already enrolled' });
       }
 
@@ -40,26 +41,35 @@ router.post(
       const session = await TrainingSession.findById(sessionId);
       if (!session) return res.status(404).json({ message: 'Session not found' });
 
-      // Save enrollment
-      await new Enrollment({ sessionId, studentEmail: email }).save();
-      const updatedSession = await TrainingSession.findByIdAndUpdate(
-        sessionId,
-        { $addToSet: { enrolledStudents: email } },
-        { new: true }
-      );
+      // Create enrollment and update session in parallel
+      const [enrollment, updatedSession] = await Promise.all([
+        new Enrollment({ sessionId, studentEmail: email }).save(),
+        TrainingSession.findByIdAndUpdate(
+          sessionId,
+          { $addToSet: { enrolledStudents: email } },
+          { new: true }
+        )
+      ]);
 
-      // Send enrollment notifications to both student and teacher
-      await sendEnrollmentNotifications(updatedSession, email, studentName);
+      // Get updated exams for this session
+      const updatedExams = await Exam.find({ sessionId }).populate('sessionId', 'title');
 
-      // If session already has an exam scheduled, send exam notification to the new student
-      if (updatedSession.scheduledExam) {
-        const exam = await Exam.findById(updatedSession.scheduledExam);
-        if (exam) {
-          await sendExamNotifications(updatedSession, exam);
-        }
-      }
+      // Send notifications in background (don't wait for them)
+      Promise.all([
+        sendEnrollmentNotifications(updatedSession, email, studentName),
+        updatedSession.scheduledExam ? Exam.findById(updatedSession.scheduledExam).then(exam => {
+          if (exam) return sendExamNotifications(updatedSession, exam);
+        }) : Promise.resolve()
+      ]).catch(error => {
+        console.error('Background notification error:', error);
+      });
 
-      res.json({ success: true, message: 'Enrolled successfully' });
+      res.json({ 
+        success: true, 
+        message: 'Enrolled successfully',
+        session: updatedSession,
+        exams: updatedExams
+      });
     } catch (error) {
       console.error('Enrollment error:', error);
       res.status(500).json({ 
@@ -94,11 +104,8 @@ router.get(
   keycloak.protect('realm:student'),
   async (req, res) => {
     try {
-      // 1) look up all the sessionIds this student enrolled in
       const enrolls = await Enrollment.find({ studentEmail: req.user.email });
       const sessionIds = enrolls.map(e => e.sessionId);
-
-      // 2) fetch any exams for those sessions
       const exams = await Exam.find({ sessionId: { $in: sessionIds } })
                               .populate('sessionId','title');
       return res.json(exams);

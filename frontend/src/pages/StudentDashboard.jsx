@@ -44,6 +44,7 @@ export default function StudentDashboard() {
   const [showCalendar, setShowCalendar] = useState(false);
   const [popupData, setPopupData] = useState(null);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [enrollingSessionId, setEnrollingSessionId] = useState(null);
 
   const [profile, setProfile] = useState({
     name: keycloak.tokenParsed?.name || 'Student',
@@ -68,148 +69,185 @@ export default function StudentDashboard() {
       .join(' ');
   };
 
+  // Fetch all data
+  const fetchAllData = async () => {
+    try {
+      await keycloak.updateToken(5);
+
+      const [resAll, resMine, resExams] = await Promise.all([
+        fetch('http://localhost:5000/api/student/sessions', {
+          headers: { Authorization: `Bearer ${keycloak.token}` }
+        }),
+        fetch('http://localhost:5000/api/student/sessions/mine', {
+          headers: { Authorization: `Bearer ${keycloak.token}` }
+        }),
+        fetch('http://localhost:5000/api/student/exams/mine', {
+          headers: { Authorization: `Bearer ${keycloak.token}` }
+        })
+      ]);
+
+      const sessionsData = await resAll.json();
+      const mySessionsData = await resMine.json();
+      const examsData = await resExams.json();
+      
+      setAllSessions(sessionsData);
+      setMySessions(mySessionsData);
+      setExams(Array.isArray(examsData) ? examsData : []);
+      setProfile(prev => ({
+        ...prev,
+        enrolledCount: mySessionsData.length,
+        examsCount: examsData.length || 0
+      }));
+
+      updateCalendarHighlights(sessionsData, mySessionsData, examsData);
+      return { sessionsData, mySessionsData, examsData };
+    } catch (error) {
+      console.error('Error loading data:', error);
+      throw error;
+    }
+  };
+
   // Fetch data functions
   useEffect(() => {
-    const load = async () => {
+    const loadData = async () => {
       try {
         if (!keycloak.authenticated) {
           await keycloak.init({ onLoad: 'login-required' });
         }
-        await keycloak.updateToken(5);
-
-        const [resAll, resMine, resExams] = await Promise.all([
-          fetch('http://localhost:5000/api/student/sessions', {
-            headers: { Authorization: `Bearer ${keycloak.token}` }
-          }),
-          fetch('http://localhost:5000/api/student/sessions/mine', {
-            headers: { Authorization: `Bearer ${keycloak.token}` }
-          }),
-          fetch('http://localhost:5000/api/student/exams/mine', {
-            headers: { Authorization: `Bearer ${keycloak.token}` }
-          })
-        ]);
-
-        const sessionsData = await resAll.json();
-        const mySessionsData = await resMine.json();
-        const examsData = await resExams.json();
-        
-        setAllSessions(sessionsData);
-        setMySessions(mySessionsData);
-        setExams(Array.isArray(examsData) ? examsData : []);
-        setProfile(prev => ({
-          ...prev,
-          enrolledCount: mySessionsData.length,
-          examsCount: examsData.length || 0
-        }));
-
-        // Prepare highlight dates for calendar
-        const newHighlightDates = {};
-        
-        // Add all available sessions to calendar
-        sessionsData.forEach(session => {
-          session.classDates?.forEach(dateObj => {
-            const date = new Date(dateObj.date);
-            const key = date.toISOString().split('T')[0];
-            if (!newHighlightDates[key]) newHighlightDates[key] = [];
-            newHighlightDates[key].push({
-              ...session,
-              type: 'available',
-              date: dateObj.date,
-              time: dateObj.time
-            });
-          });
-        });
-
-        // Add enrolled sessions to calendar
-        mySessionsData.forEach(session => {
-          session.classDates?.forEach(dateObj => {
-            const date = new Date(dateObj.date);
-            const key = date.toISOString().split('T')[0];
-            if (!newHighlightDates[key]) newHighlightDates[key] = [];
-            newHighlightDates[key].push({
-              ...session,
-              type: 'enrolled',
-              date: dateObj.date,
-              time: dateObj.time
-            });
-          });
-        });
-
-        // Add exams to calendar
-        examsData.forEach(exam => {
-          const date = new Date(exam.date);
-          const key = date.toISOString().split('T')[0];
-          if (!newHighlightDates[key]) newHighlightDates[key] = [];
-          newHighlightDates[key].push({
-            ...exam,
-            type: 'exam',
-            date: exam.date,
-            time: exam.time
-          });
-        });
-
-        setHighlightDates(newHighlightDates);
+        await fetchAllData();
       } catch (error) {
         console.error('Error loading data:', error);
       } finally {
         setIsLoading(false);
       }
     };
-    load();
+
+    loadData();
   }, []);
 
-  const enroll = async (id) => {
+  // Optimized calendar highlights update
+  const updateCalendarHighlights = (sessionsData, mySessionsData, examsData) => {
+    const newHighlightDates = {};
+    
+    // Add all available sessions to calendar
+    sessionsData.forEach(session => {
+      session.classDates?.forEach(dateObj => {
+        const date = new Date(dateObj.date);
+        const key = date.toISOString().split('T')[0];
+        if (!newHighlightDates[key]) newHighlightDates[key] = [];
+        newHighlightDates[key].push({
+          ...session,
+          type: 'available',
+          date: dateObj.date,
+          time: dateObj.time
+        });
+      });
+    });
+
+    // Add enrolled sessions to calendar
+    mySessionsData.forEach(session => {
+      session.classDates?.forEach(dateObj => {
+        const date = new Date(dateObj.date);
+        const key = date.toISOString().split('T')[0];
+        if (!newHighlightDates[key]) newHighlightDates[key] = [];
+        newHighlightDates[key].push({
+          ...session,
+          type: 'enrolled',
+          date: dateObj.date,
+          time: dateObj.time
+        });
+      });
+    });
+
+    // Add exams to calendar
+    examsData.forEach(exam => {
+      const date = new Date(exam.date);
+      const key = date.toISOString().split('T')[0];
+      if (!newHighlightDates[key]) newHighlightDates[key] = [];
+      newHighlightDates[key].push({
+        ...exam,
+        type: 'exam',
+        date: exam.date,
+        time: exam.time
+      });
+    });
+
+    setHighlightDates(newHighlightDates);
+  };
+
+  // OPTIMIZED: Fast enrollment with immediate UI update and proper data sync
+  const enroll = async (sessionId) => {
+    if (enrollingSessionId) return; // Prevent multiple clicks
+    
+    setEnrollingSessionId(sessionId);
+    
     try {
-      setIsLoading(true);
       await keycloak.updateToken(5);
-      const res = await fetch(`http://localhost:5000/api/student/sessions/${id}/enroll`, {
+      const res = await fetch(`http://localhost:5000/api/student/sessions/${sessionId}/enroll`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${keycloak.token}` }
       });
       
       if (res.ok) {
-        const [updatedAll, updatedMine] = await Promise.all([
-          fetch('http://localhost:5000/api/student/sessions', {
-            headers: { Authorization: `Bearer ${keycloak.token}` }
-          }),
-          fetch('http://localhost:5000/api/student/sessions/mine', {
-            headers: { Authorization: `Bearer ${keycloak.token}` }
-          })
-        ]);
+        const result = await res.json();
         
-        const allSessionsData = await updatedAll.json();
-        const mySessionsData = await updatedMine.json();
-        
-        setAllSessions(allSessionsData);
-        setMySessions(mySessionsData);
-        setProfile(prev => ({ ...prev, enrolledCount: mySessionsData.length }));
-
-        // Update calendar highlights
-        const newHighlightDates = {...highlightDates};
-        const enrolledSession = allSessionsData.find(s => s._id === id);
-        
+        // Immediate UI update for better user experience
+        const enrolledSession = allSessions.find(s => s._id === sessionId);
         if (enrolledSession) {
+          // Update allSessions - remove enrolled session
+          setAllSessions(prev => prev.filter(s => s._id !== sessionId));
+          
+          // Update mySessions - add enrolled session
+          setMySessions(prev => [...prev, { 
+            ...enrolledSession, 
+            enrolledStudents: [...(enrolledSession.enrolledStudents || []), profile.email] 
+          }]);
+          
+          // Update exams if any exams were returned
+          if (result.exams && result.exams.length > 0) {
+            setExams(prev => {
+              const newExams = result.exams.filter(newExam => 
+                !prev.some(existingExam => existingExam._id === newExam._id)
+              );
+              return [...prev, ...newExams];
+            });
+          }
+          
+          // Update profile count
+          setProfile(prev => ({ 
+            ...prev, 
+            enrolledCount: prev.enrolledCount + 1,
+            examsCount: result.exams ? prev.examsCount + result.exams.length : prev.examsCount
+          }));
+          
+          // Update calendar highlights locally
+          const newHighlightDates = { ...highlightDates };
           enrolledSession.classDates?.forEach(dateObj => {
             const date = new Date(dateObj.date);
             const key = date.toISOString().split('T')[0];
             if (newHighlightDates[key]) {
-              // Update existing entries for this date
               newHighlightDates[key] = newHighlightDates[key].map(item => 
-                item._id === id ? { ...item, type: 'enrolled' } : item
+                item._id === sessionId ? { ...item, type: 'enrolled' } : item
               );
             }
           });
           setHighlightDates(newHighlightDates);
         }
+        
+        // Refresh all data in background to ensure consistency
+        setTimeout(() => {
+          fetchAllData().catch(console.error);
+        }, 1000);
+        
       } else {
         const errorText = await res.text();
-        alert(errorText);
+        alert(errorText || 'Failed to enroll');
       }
     } catch (error) {
       console.error('Enrollment error:', error);
       alert('Failed to enroll. Please try again.');
     } finally {
-      setIsLoading(false);
+      setEnrollingSessionId(null);
     }
   };
 
@@ -303,11 +341,18 @@ export default function StudentDashboard() {
             </span>
           ) : (
             <button
-              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 whitespace-nowrap"
+              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold px-6 py-3 rounded-full shadow-lg hover:from-blue-600 hover:to-blue-700 hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => enroll(session._id)}
-              disabled={isLoading}
+              disabled={enrollingSessionId === session._id}
             >
-              {isLoading ? 'Enrolling...' : 'Enroll Now'}
+              {enrollingSessionId === session._id ? (
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Enrolling...
+                </div>
+              ) : (
+                'Enroll Now'
+              )}
             </button>
           )}
         </div>
@@ -485,6 +530,69 @@ export default function StudentDashboard() {
               )}
             </section>
 
+            {/* Recent Exams */}
+            <section className="space-y-6">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 bg-gradient-to-r from-purple-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                  <FaBook className="w-6 h-6 text-white" />
+                </div>
+                <h3 className="text-3xl font-bold text-gray-900 tracking-wide">Your Upcoming Exams</h3>
+              </div>
+              
+              {filteredExams.length === 0 ? (
+                <div className="text-center py-16 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-2xl border border-purple-100">
+                  <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <FaBook className="text-purple-500 text-2xl" />
+                  </div>
+                  <p className="text-gray-600 text-lg font-medium">No exams scheduled</p>
+                  <p className="text-gray-500">You'll see your upcoming exams here once they're scheduled.</p>
+                </div>
+              ) : (
+                <div className="grid gap-6">
+                  {filteredExams.slice(0, 3).map((exam, idx) => (
+                    <div key={exam._id || idx} className="bg-white rounded-2xl shadow-xl border border-blue-100 p-6 hover:shadow-2xl transition-all duration-300 hover:border-blue-300">
+                      <div className="flex flex-col lg:flex-row items-start lg:items-center gap-6">
+                        <div className="flex-shrink-0">
+                          <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg">
+                            {new Date(exam.date).getDate()}
+                          </div>
+                        </div>
+                        <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Date</p>
+                            <p className="text-lg font-bold text-gray-900">
+                              {exam.date ? new Date(exam.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : "Date not set"}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Session</p>
+                            <p className="text-lg font-semibold text-gray-800">{exam.sessionId?.title || 'N/A'}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Time</p>
+                            <p className="text-lg font-semibold text-gray-800">{exam.time || "Time not set"}</p>
+                          </div>
+                        </div>
+                        <div className={`px-4 py-2 rounded-full text-sm font-medium ${exam.isOnline ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}`}>
+                          {exam.isOnline ? 'Online' : 'Offline'}
+                        </div>
+                      </div>
+                      
+                      <div className="mt-6 pt-6 border-t border-gray-200 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center text-gray-700">
+                          <FiMapPin className="mr-3 text-blue-500" />
+                          <span>{exam.isOnline ? (exam.onlineLink || 'Online session') : (exam.location || 'Location not specified')}</span>
+                        </div>
+                        <div className="flex items-center text-gray-700">
+                          <FaUsers className="mr-3 text-blue-500" />
+                          <span>Examiner: {exam.assignedExaminer || 'Not assigned yet'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         )}
 
@@ -753,10 +861,17 @@ export default function StudentDashboard() {
                         enroll(event._id);
                         closePopup();
                       }}
-                      className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm transition-all duration-300 transform hover:scale-105"
-                      disabled={isLoading}
+                      className="mt-3 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg text-sm transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={enrollingSessionId === event._id}
                     >
-                      {isLoading ? 'Enrolling...' : 'Enroll Now'}
+                      {enrollingSessionId === event._id ? (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Enrolling...
+                        </div>
+                      ) : (
+                        'Enroll Now'
+                      )}
                     </button>
                   )}
                 </div>
