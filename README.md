@@ -68,40 +68,37 @@ A comprehensive full-stack *MERN application* designed for managing training ses
 - CORS  
 
 ---
-
-## 📁 Project Structure
-
 drone-certification-platform/
 ├── frontend/
-│ ├── src/
-│ │ ├── components/
-│ │ │ ├── CalendarComponent.jsx
-│ │ │ └── ...
-│ │ ├── dashboards/
-│ │ │ ├── StudentDashboard.jsx
-│ │ │ ├── TeacherDashboard.jsx
-│ │ │ ├── ExaminerDashboard.jsx
-│ │ │ └── CoordinatorDashboard.jsx
-│ │ ├── keycloak.js
-│ │ ├── constants.js
-│ │ └── styles/
-│ └── package.json
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── CalendarComponent.jsx
+│   │   │   └── ...
+│   │   ├── dashboards/
+│   │   │   ├── StudentDashboard.jsx
+│   │   │   ├── TeacherDashboard.jsx
+│   │   │   ├── ExaminerDashboard.jsx
+│   │   │   └── CoordinatorDashboard.jsx
+│   │   ├── keycloak.js
+│   │   ├── constants.js
+│   │   └── styles/
+│   └── package.json
 ├── backend/
-│ ├── models/
-│ │ ├── Exam.js
-│ │ ├── TrainingSession.js
-│ │ ├── Availability.js
-│ │ └── User.js
-│ ├── routes/
-│ │ ├── exams.js
-│ │ ├── trainingSessions.js
-│ │ ├── student.js
-│ │ ├── availability.js
-│ │ ├── coordinator.js
-│ │ └── emailTest.js
-│ ├── keycloak-config.js
-│ ├── server.js
-│ └── package.json
+│   ├── models/
+│   │   ├── Exam.js
+│   │   ├── TrainingSession.js
+│   │   ├── Availability.js
+│   │   └── User.js
+│   ├── routes/
+│   │   ├── exams.js
+│   │   ├── trainingSessions.js
+│   │   ├── student.js
+│   │   ├── availability.js
+│   │   ├── coordinator.js
+│   │   └── emailTest.js
+│   ├── keycloak-config.js
+│   ├── server.js
+│   └── package.json
 └── README.md
 
 yaml
