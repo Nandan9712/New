@@ -171,18 +171,21 @@ coordinator
 4️⃣ Create Users & Assign Roles
 📊 API Endpoints
 🧪 Exams
+```plaintext
 Method	Endpoint	Description	Role
 GET	/api/exams/mine	Get examiner’s assigned exams	Examiner
 PUT	/api/exams/:id/cancel	Cancel/reassign exam	Examiner
 GET	/api/exams/stats/mine	Examiner statistics	Examiner
+```
 
 📘 Training Sessions
 Method	Endpoint	Description	Role
+```plaintext
 GET	/api/training-sessions/mine	Teacher’s sessions	Teacher
 POST	/api/training-sessions	Create session	Teacher
 PUT	/api/training-sessions/:id	Update	Teacher
 DELETE	/api/training-sessions/:id	Cancel session	Teacher
-
+```
 👨‍🎓 Student
 Method	Endpoint	Description	Role
 GET	/api/student/sessions	Available sessions	Student
