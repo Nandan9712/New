@@ -68,6 +68,7 @@ A comprehensive full-stack *MERN application* designed for managing training ses
 - CORS  
 
 ---
+```plaintext
 drone-certification-platform/
 ├── frontend/
 │   ├── src/
@@ -100,6 +101,7 @@ drone-certification-platform/
 │   ├── server.js
 │   └── package.json
 └── README.md
+```
 
 yaml
 Copy code
