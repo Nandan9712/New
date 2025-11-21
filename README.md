@@ -179,35 +179,38 @@ GET	/api/exams/stats/mine	Examiner statistics	Examiner
 ```
 
 📘 Training Sessions
-Method	Endpoint	Description	Role
 ```plaintext
+Method	Endpoint	Description	Role
 GET	/api/training-sessions/mine	Teacher’s sessions	Teacher
 POST	/api/training-sessions	Create session	Teacher
 PUT	/api/training-sessions/:id	Update	Teacher
 DELETE	/api/training-sessions/:id	Cancel session	Teacher
 ```
 👨‍🎓 Student
+```plaintext
 Method	Endpoint	Description	Role
 GET	/api/student/sessions	Available sessions	Student
 GET	/api/student/sessions/mine	Enrolled sessions	Student
 POST	/api/student/sessions/:id/enroll	Enroll	Student
 GET	/api/student/exams/mine	Student exams	Student
-
+```
 🧑‍⚖ Examiner Availability
+```plaintext
 Method	Endpoint	Description	Role
 GET	/api/availability/mine	View availability	Examiner
 POST	/api/availability	Add slot	Examiner
 PUT	/api/availability/:id	Update slot	Examiner
 DELETE	/api/availability/:id	Delete slot	Examiner
-
+```
 🧑‍💼 Coordinator
+```plaintext
 Method	Endpoint	Description
 GET	/api/coordinator/sessions	All sessions
 GET	/api/coordinator/exams	All exams
 GET	/api/coordinator/examiners	All examiners
 POST	/api/coordinator/exams/schedule	Schedule exam
 PUT	/api/coordinator/exams/:id	Update exam
-
+```
 🔄 Core Functionalities
 ✔ Smart Exam Scheduling
 Session-based exam ties
