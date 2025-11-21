@@ -67,7 +67,8 @@ A comprehensive full-stack *MERN application* designed for managing training ses
 - Express Session  
 - CORS  
 
----
+### 🗂️ Project Directory Structure
+
 ```plaintext
 drone-certification-platform/
 ├── frontend/
