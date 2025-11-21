@@ -120,7 +120,7 @@ Copy code
 
 # 🖥 Backend Setup
 
-```bash
+bash
 cd backend
 npm install
 ➤ Create .env
